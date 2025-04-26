@@ -9,78 +9,82 @@ class FirestoreService {
   static DocumentReference<Map<String, dynamic>> get _totalsDoc =>
       _fs.collection('PASTELITOS').doc('Totales');
 
-  /// Guarda un pedido y actualiza los totales, incluyendo timestamp de pago si corresponde
+  /// Guarda un pedido y actualiza los totales (ahora Tradicional/Vegano)
   static Future<void> addOrder(Map<String, dynamic> order) async {
     final orderRef = _ordersCol.doc();
     final totalsRef = _totalsDoc;
 
-    // Cálculo de sabores idéntico al que ya tenías...
-    double membrilloNormal = 0, membrilloVegano = 0, batataNormal = 0, batataVegano = 0;
+    double membrilloTrad = 0, membrilloVeg = 0, batataTrad = 0, batataVeg = 0;
+
     for (final f in order['flavors'] as List<dynamic>) {
       final sabor = f['flavor'] as String;
-      final tipo  = f['type']   as String;
-      final size  = f['size']   as String;
-      final inc   = size == 'Docena' ? 1.0 : 0.5;
+      final tipo = f['type'] as String; // 'Tradicional' o 'Vegano'
+      final size = f['size'] as String; // 'Docena'/'Media docena'
+      final inc = size == 'Docena' ? 1.0 : 0.5;
 
       if (sabor == 'Mixta') {
         final half = inc / 2;
-        if (tipo == 'Normal') {
-          membrilloNormal += half;
-          batataNormal   += half;
+        if (tipo == 'Tradicional') {
+          membrilloTrad += half;
+          batataTrad += half;
         } else {
-          membrilloVegano += half;
-          batataVegano    += half;
+          membrilloVeg += half;
+          batataVeg += half;
         }
       } else if (sabor == 'Membrillo') {
-        if (tipo == 'Normal') {
-          membrilloNormal += inc;
+        if (tipo == 'Tradicional') {
+          membrilloTrad += inc;
         } else {
-          membrilloVegano += inc;
+          membrilloVeg += inc;
         }
       } else if (sabor == 'Batata') {
-        if (tipo == 'Normal') {
-          batataNormal += inc;
+        if (tipo == 'Tradicional') {
+          batataTrad += inc;
         } else {
-          batataVegano += inc;
+          batataVeg += inc;
         }
       }
     }
 
     final batch = _fs.batch();
 
-    // 1) Guardar la orden
     batch.set(orderRef, {
       ...order,
       'createdAt': FieldValue.serverTimestamp(),
       'delivered': false,
       'deliveredAt': null,
       'paid': order['paid'] as bool? ?? false,
-      // si llega paid=true, grabamos timestamp; si no, null
-      'paidAt': (order['paid'] as bool? ?? false)
-          ? FieldValue.serverTimestamp()
-          : null,
+      'paidAt':
+          (order['paid'] as bool? ?? false)
+              ? FieldValue.serverTimestamp()
+              : null,
     });
 
-    // 2) Actualizar Totales igual que antes...
     batch.set(totalsRef, {
-      'totalDocenas':    FieldValue.increment(order['docenas'] as num),
-      'membrilloNormal': FieldValue.increment(membrilloNormal),
-      'membrilloVegano': FieldValue.increment(membrilloVegano),
-      'batataNormal':    FieldValue.increment(batataNormal),
-      'batataVegano':    FieldValue.increment(batataVegano),
+      'totalDocenas': FieldValue.increment(order['docenas'] as num),
+      'membrilloTrad': FieldValue.increment(membrilloTrad),
+      'membrilloVegano': FieldValue.increment(membrilloVeg),
+      'batataTrad': FieldValue.increment(batataTrad),
+      'batataVegano': FieldValue.increment(batataVeg),
     }, SetOptions(merge: true));
 
     await batch.commit();
     printLog('Pedido guardado y totales actualizados.');
   }
 
-  /// Marca un pedido como pagado (para pagos posteriores)
+  /// Marca un pedido como pagado
   static Future<void> markPaid(String orderId) async {
     await _ordersCol.doc(orderId).update({
       'paid': true,
       'paidAt': FieldValue.serverTimestamp(),
     });
     printLog('Pedido $orderId marcado como pagado');
+  }
+
+  /// Deshace el pago
+  static Future<void> unmarkPaid(String orderId) async {
+    await _ordersCol.doc(orderId).update({'paid': false, 'paidAt': null});
+    printLog('Pago de pedido $orderId deshecho');
   }
 
   /// Marca un pedido como entregado
@@ -90,5 +94,23 @@ class FirestoreService {
       'deliveredAt': FieldValue.serverTimestamp(),
     });
     printLog('Pedido $orderId marcado como entregado');
+  }
+
+  /// Deshace la entrega
+  static Future<void> unmarkDelivered(String orderId) async {
+    await _ordersCol.doc(orderId).update({
+      'delivered': false,
+      'deliveredAt': null,
+    });
+    printLog('Entrega de pedido $orderId deshecha');
+  }
+
+  /// Cancela un pedido
+  static Future<void> cancelOrder(String orderId) async {
+    await _ordersCol.doc(orderId).update({
+      'canceled': true,
+      'canceledAt': FieldValue.serverTimestamp(),
+    });
+    printLog('Pedido $orderId cancelado');
   }
 }

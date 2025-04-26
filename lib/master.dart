@@ -25,6 +25,6 @@ class FlavorSelection {
   FlavorSelection({
     this.flavor = 'Membrillo',
     this.size = 'Docena',
-    this.type = 'Normal',
+    this.type = 'Tradicional',
   });
 }

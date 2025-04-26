@@ -33,7 +33,7 @@ class OrderPageState extends State<OrderPage> {
   final List<String> statusOptions = ['Pagado', 'Pendiente']; // NUEVO
   final List<String> flavorOptions = ['Membrillo', 'Batata', 'Mixta'];
   final List<String> sizeOptions = ['Docena', 'Media docena'];
-  final List<String> typeOptions = ['Normal', 'Vegano'];
+  final List<String> typeOptions = ['Tradicional', 'Vegano'];
 
   int get totalPieces => (docenas * 12).toInt();
   int get selectedPieces =>
