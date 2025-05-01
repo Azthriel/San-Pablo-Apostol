@@ -12,10 +12,9 @@ class FirestoreService {
   /// Guarda un pedido y actualiza los totales (ahora Tradicional/Vegano)
   static Future<void> addOrder(Map<String, dynamic> order) async {
     final orderRef = _ordersCol.doc();
-    final totalsRef = _totalsDoc;
 
+    // Cálculo de incrementos por sabor/tipo
     double membrilloTrad = 0, membrilloVeg = 0, batataTrad = 0, batataVeg = 0;
-
     for (final f in order['flavors'] as List<dynamic>) {
       final sabor = f['flavor'] as String;
       final tipo = f['type'] as String; // 'Tradicional' o 'Vegano'
@@ -48,19 +47,22 @@ class FirestoreService {
 
     final batch = _fs.batch();
 
+    // Al crear el pedido, incluida la marca de 'canceled:false' por defecto
     batch.set(orderRef, {
       ...order,
       'createdAt': FieldValue.serverTimestamp(),
       'delivered': false,
       'deliveredAt': null,
+      'canceled': false,
+      'canceledAt': null,
       'paid': order['paid'] as bool? ?? false,
-      'paidAt':
-          (order['paid'] as bool? ?? false)
-              ? FieldValue.serverTimestamp()
-              : null,
+      'paidAt': (order['paid'] as bool? ?? false)
+          ? FieldValue.serverTimestamp()
+          : null,
     });
 
-    batch.set(totalsRef, {
+    // Actualizo totales generales
+    batch.set(_totalsDoc, {
       'totalDocenas': FieldValue.increment(order['docenas'] as num),
       'membrilloTrad': FieldValue.increment(membrilloTrad),
       'membrilloVegano': FieldValue.increment(membrilloVeg),
@@ -105,12 +107,81 @@ class FirestoreService {
     printLog('Entrega de pedido $orderId deshecha');
   }
 
-  /// Cancela un pedido
+  /// Cancela un pedido y ajusta los totales
   static Future<void> cancelOrder(String orderId) async {
-    await _ordersCol.doc(orderId).update({
+    final orderRef = _ordersCol.doc(orderId);
+    final docSnap = await orderRef.get();
+    final data = docSnap.data();
+    if (data == null) return;
+
+    final num docenas = data['docenas'] as num? ?? 0;
+    double membrilloTrad = 0, membrilloVeg = 0, batataTrad = 0, batataVeg = 0;
+    final flavors =
+        (data['flavors'] as List<dynamic>).cast<Map<String, dynamic>>();
+
+    for (final f in flavors) {
+      final sabor = f['flavor'] as String;
+      final tipo = f['type'] as String;
+      final size = f['size'] as String;
+      final inc = size == 'Docena' ? 1.0 : 0.5;
+
+      if (sabor == 'Mixta') {
+        final half = inc / 2;
+        if (tipo == 'Tradicional') {
+          membrilloTrad += half;
+          batataTrad += half;
+        } else {
+          membrilloVeg += half;
+          batataVeg += half;
+        }
+      } else if (sabor == 'Membrillo') {
+        if (tipo == 'Tradicional') {
+          membrilloTrad += inc;
+        } else {
+          membrilloVeg += inc;
+        }
+      } else if (sabor == 'Batata') {
+        if (tipo == 'Tradicional') {
+          batataTrad += inc;
+        } else {
+          batataVeg += inc;
+        }
+      }
+    }
+
+    final batch = _fs.batch();
+    batch.update(orderRef, {
       'canceled': true,
       'canceledAt': FieldValue.serverTimestamp(),
     });
-    printLog('Pedido $orderId cancelado');
+    batch.set(_totalsDoc, {
+      'totalDocenas': FieldValue.increment(-docenas),
+      'membrilloTrad': FieldValue.increment(-membrilloTrad),
+      'membrilloVegano': FieldValue.increment(-membrilloVeg),
+      'batataTrad': FieldValue.increment(-batataTrad),
+      'batataVegano': FieldValue.increment(-batataVeg),
+    }, SetOptions(merge: true));
+    await batch.commit();
+
+    printLog('Pedido $orderId cancelado y totales actualizados.');
+  }
+
+  /// Elimina todos los pedidos y reinicia totales a cero
+  static Future<void> resetAllOrders() async {
+    final batch = _fs.batch();
+    final ordersSnap = await _ordersCol.get();
+    for (final doc in ordersSnap.docs) {
+      batch.delete(doc.reference);
+    }
+    batch.set(_totalsDoc, {
+      'totalDocenas': 0,
+      'membrilloTrad': 0,
+      'membrilloVegano': 0,
+      'batataTrad': 0,
+      'batataVegano': 0,
+    });
+    await batch.commit();
+
+    printLog('Todos los pedidos eliminados y totales reiniciados.');
   }
 }

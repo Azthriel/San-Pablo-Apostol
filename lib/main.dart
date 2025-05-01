@@ -3,12 +3,13 @@ import 'package:eventosspa/firebase_options.dart';
 import 'package:eventosspa/orders.dart';
 import 'package:eventosspa/orders_list.dart';
 import 'package:eventosspa/totals_page.dart';
+import 'package:eventosspa/firestore_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(EventosSPA());
+  runApp(const EventosSPA());
 }
 
 class EventosSPA extends StatelessWidget {
@@ -19,7 +20,7 @@ class EventosSPA extends StatelessWidget {
     return MaterialApp(
       title: 'Pastelitos San Pablo Apostol',
       theme: ThemeData(primarySwatch: Colors.deepPurple),
-      home: HomePage(),
+      home: const HomePage(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -48,11 +49,11 @@ class HomePageState extends State<HomePage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Acceso restringido'),
+          title: const Text('Acceso restringido'),
           content: TextField(
             controller: _passwordController,
             obscureText: true,
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               labelText: 'Contraseña',
               border: OutlineInputBorder(),
             ),
@@ -63,7 +64,7 @@ class HomePageState extends State<HomePage> {
                 _passwordController.clear();
                 Navigator.of(context).pop();
               },
-              child: Text('Cancelar'),
+              child: const Text('Cancelar'),
             ),
             ElevatedButton(
               onPressed: () {
@@ -74,16 +75,16 @@ class HomePageState extends State<HomePage> {
                   });
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Autenticación exitosa')),
+                    const SnackBar(content: Text('Autenticación exitosa')),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Contraseña incorrecta')),
+                    const SnackBar(content: Text('Contraseña incorrecta')),
                   );
                 }
                 _passwordController.clear();
               },
-              child: Text('Entrar'),
+              child: const Text('Entrar'),
             ),
           ],
         );
@@ -91,23 +92,60 @@ class HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _confirmReset() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reiniciar pedidos'),
+          content: const Text(
+            '¿Seguro que deseas eliminar todos los pedidos y reiniciar los totales?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Reiniciar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed == true) {
+      await FirestoreService.resetAllOrders();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pedidos y totales reiniciados')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final pages = [OrderPage(), TotalsPage(), OrdersListPage()];
+    final pages = [
+      const OrderPage(),
+      const TotalsPage(),
+      const OrdersListPage(),
+    ];
 
     return Scaffold(
       appBar: AppBar(
-        // Aumentamos la altura del AppBar para que el logo pueda mostrarse más grande
         toolbarHeight: 100,
-        // Reducimos el padding izquierdo para dejar al logo más cerca del borde
         titleSpacing: 16,
-        title: Image.asset(
-          'assets/spa.png',
-          // Ajustamos la altura del logo
-          height: 80,
-          fit: BoxFit.contain,
-        ),
+        title: Image.asset('assets/spa.png', height: 80, fit: BoxFit.contain),
         centerTitle: false,
+        actions: [
+          if (_currentIndex == 2 && _authenticated)
+            IconButton(
+              icon: const Icon(Icons.delete_forever),
+              tooltip: 'Reiniciar pedidos',
+              onPressed: _confirmReset,
+            ),
+        ],
       ),
       body: pages[_currentIndex],
       bottomNavigationBar: BottomAppBar(
@@ -115,15 +153,15 @@ class HomePageState extends State<HomePage> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
-              icon: Icon(Icons.shopping_cart),
+              icon: const Icon(Icons.shopping_cart),
               onPressed: () => setState(() => _currentIndex = 0),
             ),
             IconButton(
-              icon: Icon(Icons.bar_chart),
+              icon: const Icon(Icons.bar_chart),
               onPressed: () => setState(() => _currentIndex = 1),
             ),
             IconButton(
-              icon: Icon(Icons.list_alt),
+              icon: const Icon(Icons.list_alt),
               onPressed: () {
                 if (_authenticated) {
                   setState(() => _currentIndex = 2);
