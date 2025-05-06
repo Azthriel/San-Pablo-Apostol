@@ -6,6 +6,7 @@ import 'package:eventosspa/totals_page.dart';
 import 'package:eventosspa/firestore_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -36,7 +37,15 @@ class HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   bool _authenticated = false;
   final TextEditingController _passwordController = TextEditingController();
-  static const String _listPassword = 'LexieChicho2025';
+
+  late String _listPassword;
+  bool _loadingPassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadListPassword();
+  }
 
   @override
   void dispose() {
@@ -44,7 +53,27 @@ class HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  /// Carga la contraseña desde Firestore:
+  /// colección 'PASTELITOS', documento 'Config', campo 'listPassword'
+  Future<void> _loadListPassword() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('PASTELITOS')
+        .doc('Config')
+        .get();
+    final data = doc.data();
+    setState(() {
+      _listPassword = (data?['listPassword'] as String?) ?? '';
+      _loadingPassword = false;
+    });
+  }
+
   Future<void> _showAuthDialog() async {
+    if (_loadingPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cargando configuración...')),
+      );
+      return;
+    }
     await showDialog<void>(
       context: context,
       builder: (context) {

@@ -88,7 +88,7 @@ class TotalsPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '📊 Totales de Pastelitos',
+            '📊 Pastelitos vendidos por el grupo',
             style: Theme.of(
               context,
             ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
