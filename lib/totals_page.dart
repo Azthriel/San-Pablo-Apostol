@@ -18,20 +18,16 @@ class TotalsPage extends StatelessWidget {
   /// Construye una tarjeta métrica con título en dos líneas y valor en dos líneas
   Widget _buildMetricCard(
     BuildContext context,
-    String label, // ej. 'Membrillo Trad.'
-    String value, // ej. '1 ½ docenas'
+    String label,
+    String value,
     IconData icon,
   ) {
     final primary = Theme.of(context).colorScheme.primary;
-
-    // Separar label
     final labelParts = label.split(' ');
     final title1 = labelParts.first;
     final title2 = labelParts.length > 1 ? labelParts.sublist(1).join(' ') : '';
-
-    // Separar valor
     final valueParts = value.split(' ');
-    final suffix = valueParts.last; // 'docenas' o 'docena'
+    final suffix = valueParts.last;
     final numberStr = valueParts.sublist(0, valueParts.length - 1).join(' ');
 
     return Card(
@@ -48,37 +44,32 @@ class TotalsPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Título en dos líneas
                   Text(
                     title1,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   if (title2.isNotEmpty)
                     Text(
                       title2,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   const SizedBox(height: 8),
-                  // Valor en dos líneas
                   Text(
                     numberStr,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(color: primary, fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: primary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   Text(
                     suffix,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(color: primary),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(color: primary),
                   ),
                 ],
               ),
@@ -98,19 +89,19 @@ class TotalsPage extends StatelessWidget {
         children: [
           Text(
             '📊 Totales de Pastelitos',
-            style: Theme.of(context)
-                .textTheme
-                .headlineMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
 
-          // ── Totales generales ──
+          // Totales generales
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('PASTELITOS')
-                .doc('Totales')
-                .snapshots(),
+            stream:
+                FirebaseFirestore.instance
+                    .collection('PASTELITOS')
+                    .doc('Totales')
+                    .snapshots(),
             builder: (context, snap) {
               if (snap.hasError) {
                 return const Center(child: Text('Error cargando totales'));
@@ -135,7 +126,6 @@ class TotalsPage extends StatelessWidget {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      // Total general
                       Row(
                         children: [
                           Icon(
@@ -146,27 +136,22 @@ class TotalsPage extends StatelessWidget {
                           const SizedBox(width: 12),
                           Text(
                             'Total',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
+                            style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(width: 6),
                           Text(
                             _docenaLabel(totalDoc),
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .secondary),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.secondary,
+                            ),
                           ),
                         ],
                       ),
                       const Divider(height: 32),
-                      // Grid de sabores
                       GridView.count(
                         crossAxisCount: 2,
                         childAspectRatio: 0.85,
@@ -211,40 +196,47 @@ class TotalsPage extends StatelessWidget {
           const SizedBox(height: 32),
           Text(
             '⌛ Pastelitos por entregar',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
 
-          // ── Pastelitos pendientes ──
-          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('PASTELITOS')
-                .doc('Ordenes')
-                .collection('items')
-                .where('delivered', isEqualTo: false)
-                .where('canceled', isEqualTo: false)
-                .snapshots(),
+          // Pastelitos pendientes usando Totales.docenasEntregadas
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream:
+                FirebaseFirestore.instance
+                    .collection('PASTELITOS')
+                    .doc('Totales')
+                    .snapshots(),
             builder: (context, snap) {
               if (snap.hasError) {
                 return const Center(child: Text('Error cargando pendientes'));
               }
-              if (!snap.hasData) {
+              if (!snap.hasData || !snap.data!.exists) {
                 return const Center(child: CircularProgressIndicator());
               }
-              final pending = snap.data!.docs.fold<num>(
-                0,
-                (total, doc) => total + (doc.data()['docenas'] as num? ?? 0),
-              );
+
+              final data = snap.data!.data()!;
+              final totalDoc = data['totalDocenas'] as num? ?? 0;
+              final delivered = data['docenasEntregadas'] as num? ?? 0;
+              final pending = totalDoc - delivered;
+
+              final label = _docenaLabel(pending);
+              final parts = label.split(' ');
+              final numberStr = parts.sublist(0, parts.length - 1).join(' ');
+              final suffix = parts.last;
+
               return Card(
                 elevation: 4,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                      vertical: 20, horizontal: 16),
+                    vertical: 20,
+                    horizontal: 16,
+                  ),
                   child: Row(
                     children: [
                       Icon(
@@ -253,36 +245,25 @@ class TotalsPage extends StatelessWidget {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(width: 12),
-                      // Valor pendiente en dos líneas
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            pending
-                                .toDouble()
-                                .truncate()
-                                .toString() + // si es entero
-                                (pending % 1 >= 0.5 ? '½' : ''),
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color:
-                                        Theme.of(context).colorScheme.primary),
+                            numberStr,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                           Text(
-                            pending % 1 >= 0.5
-                                ? '½ docena'
-                                : pending == 1
-                                    ? 'docena'
-                                    : 'docenas',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                    color:
-                                        Theme.of(context).colorScheme.primary),
+                            suffix,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         ],
                       ),

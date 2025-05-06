@@ -9,16 +9,15 @@ class FirestoreService {
   static DocumentReference<Map<String, dynamic>> get _totalsDoc =>
       _fs.collection('PASTELITOS').doc('Totales');
 
-  /// Guarda un pedido y actualiza los totales (ahora Tradicional/Vegano)
+  /// Guarda un pedido, inicializa docenasEntregadas a 0 y actualiza totales
   static Future<void> addOrder(Map<String, dynamic> order) async {
     final orderRef = _ordersCol.doc();
 
-    // Cálculo de incrementos por sabor/tipo
     double membrilloTrad = 0, membrilloVeg = 0, batataTrad = 0, batataVeg = 0;
     for (final f in order['flavors'] as List<dynamic>) {
       final sabor = f['flavor'] as String;
-      final tipo = f['type'] as String; // 'Tradicional' o 'Vegano'
-      final size = f['size'] as String; // 'Docena'/'Media docena'
+      final tipo = f['type'] as String;
+      final size = f['size'] as String;
       final inc = size == 'Docena' ? 1.0 : 0.5;
 
       if (sabor == 'Mixta') {
@@ -47,7 +46,6 @@ class FirestoreService {
 
     final batch = _fs.batch();
 
-    // Al crear el pedido, incluida la marca de 'canceled:false' por defecto
     batch.set(orderRef, {
       ...order,
       'createdAt': FieldValue.serverTimestamp(),
@@ -61,13 +59,13 @@ class FirestoreService {
           : null,
     });
 
-    // Actualizo totales generales
     batch.set(_totalsDoc, {
       'totalDocenas': FieldValue.increment(order['docenas'] as num),
       'membrilloTrad': FieldValue.increment(membrilloTrad),
       'membrilloVegano': FieldValue.increment(membrilloVeg),
       'batataTrad': FieldValue.increment(batataTrad),
       'batataVegano': FieldValue.increment(batataVeg),
+      'docenasEntregadas': FieldValue.increment(0),
     }, SetOptions(merge: true));
 
     await batch.commit();
@@ -85,29 +83,56 @@ class FirestoreService {
 
   /// Deshace el pago
   static Future<void> unmarkPaid(String orderId) async {
-    await _ordersCol.doc(orderId).update({'paid': false, 'paidAt': null});
+    await _ordersCol.doc(orderId).update({
+      'paid': false,
+      'paidAt': null,
+    });
     printLog('Pago de pedido $orderId deshecho');
   }
 
-  /// Marca un pedido como entregado
+  /// Marca un pedido como entregado y actualiza docenasEntregadas
   static Future<void> markDelivered(String orderId) async {
-    await _ordersCol.doc(orderId).update({
+    final orderRef = _ordersCol.doc(orderId);
+    final docSnap = await orderRef.get();
+    final data = docSnap.data();
+    if (data == null) return;
+    final num docenas = data['docenas'] as num? ?? 0;
+
+    final batch = _fs.batch();
+    batch.update(orderRef, {
       'delivered': true,
       'deliveredAt': FieldValue.serverTimestamp(),
     });
+    batch.set(_totalsDoc, {
+      'docenasEntregadas': FieldValue.increment(docenas),
+    }, SetOptions(merge: true));
+
+    await batch.commit();
     printLog('Pedido $orderId marcado como entregado');
   }
 
-  /// Deshace la entrega
+  /// Deshace la entrega y actualiza docenasEntregadas
   static Future<void> unmarkDelivered(String orderId) async {
-    await _ordersCol.doc(orderId).update({
+    final orderRef = _ordersCol.doc(orderId);
+    final docSnap = await orderRef.get();
+    final data = docSnap.data();
+    if (data == null) return;
+    final num docenas = data['docenas'] as num? ?? 0;
+
+    final batch = _fs.batch();
+    batch.update(orderRef, {
       'delivered': false,
       'deliveredAt': null,
     });
+    batch.set(_totalsDoc, {
+      'docenasEntregadas': FieldValue.increment(-docenas),
+    }, SetOptions(merge: true));
+
+    await batch.commit();
     printLog('Entrega de pedido $orderId deshecha');
   }
 
-  /// Cancela un pedido y ajusta los totales
+  /// Cancela un pedido y ajusta los totales (sin tocar docenasEntregadas)
   static Future<void> cancelOrder(String orderId) async {
     final orderRef = _ordersCol.doc(orderId);
     final docSnap = await orderRef.get();
@@ -124,7 +149,6 @@ class FirestoreService {
       final tipo = f['type'] as String;
       final size = f['size'] as String;
       final inc = size == 'Docena' ? 1.0 : 0.5;
-
       if (sabor == 'Mixta') {
         final half = inc / 2;
         if (tipo == 'Tradicional') {
@@ -161,8 +185,8 @@ class FirestoreService {
       'batataTrad': FieldValue.increment(-batataTrad),
       'batataVegano': FieldValue.increment(-batataVeg),
     }, SetOptions(merge: true));
-    await batch.commit();
 
+    await batch.commit();
     printLog('Pedido $orderId cancelado y totales actualizados.');
   }
 
@@ -179,9 +203,9 @@ class FirestoreService {
       'membrilloVegano': 0,
       'batataTrad': 0,
       'batataVegano': 0,
+      'docenasEntregadas': 0,
     });
     await batch.commit();
-
     printLog('Todos los pedidos eliminados y totales reiniciados.');
   }
 }

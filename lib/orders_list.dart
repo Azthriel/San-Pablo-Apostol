@@ -44,10 +44,7 @@ class _OrdersListPageState extends State<OrdersListPage> {
       children: [
         Text(
           label,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: labelColor),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: labelColor),
         ),
         action,
       ],
@@ -139,21 +136,20 @@ class _OrdersListPageState extends State<OrdersListPage> {
                 itemBuilder: (_, i) {
                   final doc = filteredDocs[i];
                   final o = doc.data();
-                  final flavors =
-                      (o['flavors'] as List).cast<Map<String, dynamic>>();
+                  final flavors = (o['flavors'] as List).cast<Map<String, dynamic>>();
                   final paid = o['paid'] as bool? ?? false;
                   final paidAt = (o['paidAt'] as Timestamp?)?.toDate();
                   final delivered = o['delivered'] as bool? ?? false;
-                  final deliveredAt =
-                      (o['deliveredAt'] as Timestamp?)?.toDate();
+                  final deliveredAt = (o['deliveredAt'] as Timestamp?)?.toDate();
                   final canceled = o['canceled'] as bool? ?? false;
-                  final canceledAt =
-                      (o['canceledAt'] as Timestamp?)?.toDate();
+                  final canceledAt = (o['canceledAt'] as Timestamp?)?.toDate();
+                  final paymentMethod = o['paymentMethod'] as String? ?? '';
 
                   return Card(
                     elevation: 4,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     margin: const EdgeInsets.symmetric(vertical: 8),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -168,6 +164,11 @@ class _OrdersListPageState extends State<OrdersListPage> {
                           const SizedBox(height: 4),
                           Text(
                             'Vendedor: ${o['sellerName']} (${o['sellerBranch']})',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Método de pago: $paymentMethod',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
 
@@ -245,14 +246,14 @@ class _OrdersListPageState extends State<OrdersListPage> {
                                       icon: const Icon(Icons.undo),
                                       label: const Text('Deshacer pago'),
                                       onPressed: () async {
-                                        await FirestoreService
-                                            .unmarkPaid(doc.id);
+                                        await FirestoreService.unmarkPaid(doc.id);
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(
-                                                content: Text(
-                                                    'Se deshizo el pago')),
+                                              content:
+                                                  Text('Se deshizo el pago'),
+                                            ),
                                           );
                                         }
                                       },
@@ -266,8 +267,9 @@ class _OrdersListPageState extends State<OrdersListPage> {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(
-                                                content: Text(
-                                                    'Pago registrado ✅')),
+                                              content:
+                                                  Text('Pago registrado ✅'),
+                                            ),
                                           );
                                         }
                                       },
@@ -287,14 +289,15 @@ class _OrdersListPageState extends State<OrdersListPage> {
                                       icon: const Icon(Icons.undo),
                                       label: const Text('Deshacer entrega'),
                                       onPressed: () async {
-                                        await FirestoreService
-                                            .unmarkDelivered(doc.id);
+                                        await FirestoreService.unmarkDelivered(
+                                            doc.id);
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(
-                                                content: Text(
-                                                    'Se deshizo la entrega')),
+                                              content: Text(
+                                                  'Se deshizo la entrega'),
+                                            ),
                                           );
                                         }
                                       },
@@ -303,14 +306,15 @@ class _OrdersListPageState extends State<OrdersListPage> {
                                       icon: const Icon(Icons.check),
                                       label: const Text('Marcar entregado'),
                                       onPressed: () async {
-                                        await FirestoreService
-                                            .markDelivered(doc.id);
+                                        await FirestoreService.markDelivered(
+                                            doc.id);
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(
-                                                content: Text(
-                                                    'Pedido entregado ✅')),
+                                              content: Text(
+                                                  'Pedido entregado ✅'),
+                                            ),
                                           );
                                         }
                                       },
