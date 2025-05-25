@@ -54,9 +54,10 @@ class FirestoreService {
       'canceled': false,
       'canceledAt': null,
       'paid': order['paid'] as bool? ?? false,
-      'paidAt': (order['paid'] as bool? ?? false)
-          ? FieldValue.serverTimestamp()
-          : null,
+      'paidAt':
+          (order['paid'] as bool? ?? false)
+              ? FieldValue.serverTimestamp()
+              : null,
     });
 
     batch.set(_totalsDoc, {
@@ -83,10 +84,7 @@ class FirestoreService {
 
   /// Deshace el pago
   static Future<void> unmarkPaid(String orderId) async {
-    await _ordersCol.doc(orderId).update({
-      'paid': false,
-      'paidAt': null,
-    });
+    await _ordersCol.doc(orderId).update({'paid': false, 'paidAt': null});
     printLog('Pago de pedido $orderId deshecho');
   }
 
@@ -120,10 +118,7 @@ class FirestoreService {
     final num docenas = data['docenas'] as num? ?? 0;
 
     final batch = _fs.batch();
-    batch.update(orderRef, {
-      'delivered': false,
-      'deliveredAt': null,
-    });
+    batch.update(orderRef, {'delivered': false, 'deliveredAt': null});
     batch.set(_totalsDoc, {
       'docenasEntregadas': FieldValue.increment(-docenas),
     }, SetOptions(merge: true));
@@ -207,5 +202,10 @@ class FirestoreService {
     });
     await batch.commit();
     printLog('Todos los pedidos eliminados y totales reiniciados.');
+  }
+
+  /// Stream de pedidos (ordenados por createdAt)
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamOrders() {
+    return _ordersCol.orderBy('createdAt', descending: false).snapshots();
   }
 }
