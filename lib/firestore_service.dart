@@ -208,4 +208,21 @@ class FirestoreService {
   static Stream<QuerySnapshot<Map<String, dynamic>>> streamOrders() {
     return _ordersCol.orderBy('createdAt', descending: false).snapshots();
   }
+
+  /// Guarda un pago en Tesorería (Colección: TESORERIA → Documento: "PAGOS" → Subcolección: "PAGOS" → Doc auto-ID)
+  static Future<String> addPago(Map<String, dynamic> pago) async {
+    // Definimos la ruta: TESORERIA (colección) → PAGOS (documento) → PAGOS (subcolección)
+    final CollectionReference<Map<String, dynamic>> pagosCol = _fs
+        .collection('TESORERIA')
+        .doc('PAGOS')
+        .collection('COMPROBANTES');
+
+    final DocumentReference<Map<String, dynamic>> docRef = pagosCol.doc();
+
+    // Agregamos también un campo createdAt con marca de tiempo
+    await docRef.set({...pago, 'createdAt': FieldValue.serverTimestamp()});
+
+    printLog('Pago ${docRef.id} guardado en Tesorería');
+    return docRef.id;
+  }
 }

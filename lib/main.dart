@@ -2,14 +2,24 @@
 import 'package:eventosspa/firebase_options.dart';
 import 'package:eventosspa/orders.dart';
 import 'package:eventosspa/orders_list.dart';
+import 'package:eventosspa/tesoreria_page.dart';
 import 'package:eventosspa/totals_page.dart';
 import 'package:eventosspa/firestore_service.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  if (kIsWeb) {
+    SemanticsBinding.instance.ensureSemantics();
+  }
   runApp(const EventosSPA());
 }
 
@@ -19,9 +29,14 @@ class EventosSPA extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pastelitos San Pablo Apostol',
+      title: 'San Pablo Apóstol',
       theme: ThemeData(primarySwatch: Colors.deepPurple),
-      home: const HomePage(),
+
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const HomePage(),
+        '/tesoreria': (context) => const TesoreriaPage(),
+      },
       debugShowCheckedModeBanner: false,
     );
   }
@@ -56,10 +71,11 @@ class HomePageState extends State<HomePage> {
   /// Carga la contraseña desde Firestore:
   /// colección 'PASTELITOS', documento 'Config', campo 'listPassword'
   Future<void> _loadListPassword() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('PASTELITOS')
-        .doc('Config')
-        .get();
+    final doc =
+        await FirebaseFirestore.instance
+            .collection('PASTELITOS')
+            .doc('Config')
+            .get();
     final data = doc.data();
     setState(() {
       _listPassword = (data?['listPassword'] as String?) ?? '';
