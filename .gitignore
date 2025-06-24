@@ -57,3 +57,5 @@ firestore.rules
 .metadata
 lib/firebase_options.dart
 .firebaserc
+
+assets/back.png

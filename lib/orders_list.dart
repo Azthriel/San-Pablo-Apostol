@@ -3,6 +3,7 @@ import 'package:eventosspa/firestore_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:eventosspa/master.dart';
 
 class OrdersListPage extends StatefulWidget {
   const OrdersListPage({super.key});
@@ -424,40 +425,45 @@ class _OrdersListPageState extends State<OrdersListPage> {
                                   }),
                                   const SizedBox(height: 16),
                                   // Cancelación
-                                  if (!canceled)
-                                    ElevatedButton.icon(
-                                      icon: const Icon(
-                                        Icons.cancel,
-                                        color: Colors.red,
-                                      ),
-                                      label: const Text('Cancelar pedido'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.white,
-                                        foregroundColor: Colors.black87,
-                                        side: const BorderSide(
+                                  if (!canceled) ...[
+                                    if (!readerApproved) ...[
+                                      ElevatedButton.icon(
+                                        icon: const Icon(
+                                          Icons.cancel,
                                           color: Colors.red,
                                         ),
-                                      ),
-                                      onPressed: () async {
-                                        await FirestoreService.cancelOrder(
-                                          doc.id,
-                                        );
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Pedido cancelado'),
-                                            ),
+                                        label: const Text('Cancelar pedido'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: Colors.black87,
+                                          side: const BorderSide(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        onPressed: () async {
+                                          await FirestoreService.cancelOrder(
+                                            doc.id,
                                           );
-                                        }
-                                      },
-                                    )
-                                  else
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Pedido cancelado',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ] else ...[
                                     Text(
                                       'Cancelado: ${canceledAt != null ? DateFormat('dd/MM/yyyy HH:mm').format(canceledAt) : '—'}',
                                       style: const TextStyle(color: Colors.red),
                                     ),
+                                  ],
                                   const SizedBox(height: 12),
                                   // Pago
                                   if (!canceled)
@@ -467,53 +473,57 @@ class _OrdersListPageState extends State<OrdersListPage> {
                                           'Pagado: ${paidAt != null ? DateFormat('dd/MM/yyyy HH:mm').format(paidAt) : '—'}',
                                       labelColor: Colors.blue,
                                       action:
-                                          paid
-                                              ? TextButton.icon(
-                                                icon: const Icon(Icons.undo),
-                                                label: const Text(
-                                                  'Deshacer pago',
-                                                ),
-                                                onPressed: () async {
-                                                  await FirestoreService.unmarkPaid(
-                                                    doc.id,
-                                                  );
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Se deshizo el pago',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              )
-                                              : ElevatedButton.icon(
-                                                icon: const Icon(
-                                                  Icons.attach_money,
-                                                ),
-                                                label: const Text(
-                                                  'Marcar pagado',
-                                                ),
-                                                onPressed: () async {
-                                                  await FirestoreService.markPaid(
-                                                    doc.id,
-                                                  );
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Pago registrado ✅',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
+                                          !readerApproved
+                                              ? paid
+                                                  ? TextButton.icon(
+                                                    icon: const Icon(
+                                                      Icons.undo,
+                                                    ),
+                                                    label: const Text(
+                                                      'Deshacer pago',
+                                                    ),
+                                                    onPressed: () async {
+                                                      await FirestoreService.unmarkPaid(
+                                                        doc.id,
+                                                      );
+                                                      if (context.mounted) {
+                                                        ScaffoldMessenger.of(
+                                                          context,
+                                                        ).showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text(
+                                                              'Se deshizo el pago',
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                  )
+                                                  : ElevatedButton.icon(
+                                                    icon: const Icon(
+                                                      Icons.attach_money,
+                                                    ),
+                                                    label: const Text(
+                                                      'Marcar pagado',
+                                                    ),
+                                                    onPressed: () async {
+                                                      await FirestoreService.markPaid(
+                                                        doc.id,
+                                                      );
+                                                      if (context.mounted) {
+                                                        ScaffoldMessenger.of(
+                                                          context,
+                                                        ).showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text(
+                                                              'Pago registrado ✅',
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                  )
+                                              : SizedBox.shrink(),
                                     ),
                                   const SizedBox(height: 8),
                                   // Entrega
@@ -524,51 +534,57 @@ class _OrdersListPageState extends State<OrdersListPage> {
                                           'Entregado: ${deliveredAt != null ? DateFormat('dd/MM/yyyy HH:mm').format(deliveredAt) : '—'}',
                                       labelColor: Colors.green,
                                       action:
-                                          delivered
-                                              ? TextButton.icon(
-                                                icon: const Icon(Icons.undo),
-                                                label: const Text(
-                                                  'Deshacer entrega',
-                                                ),
-                                                onPressed: () async {
-                                                  await FirestoreService.unmarkDelivered(
-                                                    doc.id,
-                                                  );
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Se deshizo la entrega',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              )
-                                              : ElevatedButton.icon(
-                                                icon: const Icon(Icons.check),
-                                                label: const Text(
-                                                  'Marcar entregado',
-                                                ),
-                                                onPressed: () async {
-                                                  await FirestoreService.markDelivered(
-                                                    doc.id,
-                                                  );
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Pedido entregado ✅',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
+                                          !readerApproved
+                                              ? delivered
+                                                  ? TextButton.icon(
+                                                    icon: const Icon(
+                                                      Icons.undo,
+                                                    ),
+                                                    label: const Text(
+                                                      'Deshacer entrega',
+                                                    ),
+                                                    onPressed: () async {
+                                                      await FirestoreService.unmarkDelivered(
+                                                        doc.id,
+                                                      );
+                                                      if (context.mounted) {
+                                                        ScaffoldMessenger.of(
+                                                          context,
+                                                        ).showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text(
+                                                              'Se deshizo la entrega',
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                  )
+                                                  : ElevatedButton.icon(
+                                                    icon: const Icon(
+                                                      Icons.check,
+                                                    ),
+                                                    label: const Text(
+                                                      'Marcar entregado',
+                                                    ),
+                                                    onPressed: () async {
+                                                      await FirestoreService.markDelivered(
+                                                        doc.id,
+                                                      );
+                                                      if (context.mounted) {
+                                                        ScaffoldMessenger.of(
+                                                          context,
+                                                        ).showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text(
+                                                              'Pedido entregado ✅',
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                  )
+                                              : SizedBox.shrink(),
                                     ),
                                 ],
                               ),

@@ -15,26 +15,29 @@ class TotalsPage extends StatelessWidget {
     return '$intPart ${intPart == 1 ? 'docena' : 'docenas'}';
   }
 
-  /// Construye una tarjeta métrica con título en dos líneas y valor en dos líneas
+  /// Construye una tarjeta métrica con título en dos líneas, valor en dos líneas y bolsas necesarias
   Widget _buildMetricCard(
     BuildContext context,
     String label,
-    String value,
+    num val,
     IconData icon,
   ) {
     final primary = Theme.of(context).colorScheme.primary;
     final labelParts = label.split(' ');
     final title1 = labelParts.first;
     final title2 = labelParts.length > 1 ? labelParts.sublist(1).join(' ') : '';
-    final valueParts = value.split(' ');
+    final valueStr = _docenaLabel(val);
+    final valueParts = valueStr.split(' ');
     final suffix = valueParts.last;
     final numberStr = valueParts.sublist(0, valueParts.length - 1).join(' ');
+    // Calcular bolsas (1 bolsa por cada media docena)
+    final bagCount = (val * 2).round();
 
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
         child: Row(
           children: [
             Icon(icon, size: 28, color: primary),
@@ -70,6 +73,13 @@ class TotalsPage extends StatelessWidget {
                     style: Theme.of(
                       context,
                     ).textTheme.titleMedium?.copyWith(color: primary),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '🛍️ $bagCount bolsas',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: primary),
                   ),
                 ],
               ),
@@ -117,6 +127,9 @@ class TotalsPage extends StatelessWidget {
               final batataTrad = data['batataTrad'] as num? ?? 0;
               final batataVeg = data['batataVegano'] as num? ?? 0;
 
+              // Calcular bolsas totales
+              final totalBags = (totalDoc * 2).round();
+
               return Card(
                 elevation: 6,
                 shape: RoundedRectangleBorder(
@@ -126,65 +139,134 @@ class TotalsPage extends StatelessWidget {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.auto_stories,
-                            size: 36,
-                            color: Theme.of(context).colorScheme.secondary,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Total',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _docenaLabel(totalDoc),
-                            style: Theme.of(
-                              context,
-                            ).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.secondary,
-                            ),
-                          ),
-                        ],
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          // En dispositivos angostos, usar Wrap para evitar overflow
+                          if (constraints.maxWidth < 400) {
+                            return Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                Icon(
+                                  Icons.auto_stories,
+                                  size: 36,
+                                  color:
+                                      Theme.of(context).colorScheme.secondary,
+                                ),
+                                Text(
+                                  'Total',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  _docenaLabel(totalDoc),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                  ),
+                                ),
+                                Text(
+                                  '🛍️ $totalBags bolsas',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+                          // Pantallas más anchas
+                          return Row(
+                            children: [
+                              Icon(
+                                Icons.auto_stories,
+                                size: 36,
+                                color: Theme.of(context).colorScheme.secondary,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Total',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _docenaLabel(totalDoc),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color:
+                                      Theme.of(context).colorScheme.secondary,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Spacer(),
+                              Text(
+                                '🛍️ $totalBags bolsas',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color:
+                                      Theme.of(context).colorScheme.secondary,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const Divider(height: 32),
-                      GridView.count(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.85,
-                        shrinkWrap: true,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: [
-                          _buildMetricCard(
-                            context,
-                            'Membrillo Trad.',
-                            _docenaLabel(membrilloTrad),
-                            Icons.food_bank,
-                          ),
-                          _buildMetricCard(
-                            context,
-                            'Membrillo Veg.',
-                            _docenaLabel(membrilloVeg),
-                            Icons.eco,
-                          ),
-                          _buildMetricCard(
-                            context,
-                            'Batata Trad.',
-                            _docenaLabel(batataTrad),
-                            Icons.local_dining,
-                          ),
-                          _buildMetricCard(
-                            context,
-                            'Batata Veg.',
-                            _docenaLabel(batataVeg),
-                            Icons.grass,
-                          ),
-                        ],
+                      // Layout responsive para Grid
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final cols = constraints.maxWidth < 600 ? 1 : 2;
+                          final aspect =
+                              constraints.maxWidth < 600 ? 1.5 : 0.85;
+                          return GridView.count(
+                            crossAxisCount: cols,
+                            childAspectRatio: aspect,
+                            shrinkWrap: true,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: [
+                              _buildMetricCard(
+                                context,
+                                'Membrillo Trad.',
+                                membrilloTrad,
+                                Icons.food_bank,
+                              ),
+                              _buildMetricCard(
+                                context,
+                                'Membrillo Veg.',
+                                membrilloVeg,
+                                Icons.eco,
+                              ),
+                              _buildMetricCard(
+                                context,
+                                'Batata Trad.',
+                                batataTrad,
+                                Icons.local_dining,
+                              ),
+                              _buildMetricCard(
+                                context,
+                                'Batata Veg.',
+                                batataVeg,
+                                Icons.grass,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -226,6 +308,8 @@ class TotalsPage extends StatelessWidget {
               final parts = label.split(' ');
               final numberStr = parts.sublist(0, parts.length - 1).join(' ');
               final suffix = parts.last;
+              // También calculamos bolsas pendientes si hace falta usarlas luego
+              final pendingBags = (pending * 2).round();
 
               return Card(
                 elevation: 4,
@@ -245,27 +329,39 @@ class TotalsPage extends StatelessWidget {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            numberStr,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
+                      Expanded(
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            Text(
+                              numberStr,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
                             ),
-                          ),
-                          Text(
-                            suffix,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
+                            Text(
+                              suffix,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
                             ),
-                          ),
-                        ],
+                            Text(
+                              '🛍️ $pendingBags bolsas',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
