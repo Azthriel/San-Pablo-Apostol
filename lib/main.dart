@@ -215,13 +215,13 @@ class HomePageState extends State<HomePage> {
           ],
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.pushNamed(context, '/tesoreria');
-        },
-        tooltip: 'Tesorería',
-        child: const Icon(Icons.attach_money),
-      ),
+      // floatingActionButton: FloatingActionButton(
+      //   onPressed: () {
+      //     Navigator.pushNamed(context, '/tesoreria');
+      //   },
+      //   tooltip: 'Tesorería',
+      //   child: const Icon(Icons.attach_money),
+      // ),
       body: pages[_currentIndex],
       bottomNavigationBar: BottomAppBar(
         child: Row(

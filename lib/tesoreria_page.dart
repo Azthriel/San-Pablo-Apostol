@@ -1,5 +1,6 @@
 // lib/tesoreria_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:eventosspa/master.dart';
 import 'package:flutter/foundation.dart';
 import 'package:eventosspa/firestore_service.dart';
 import 'package:flutter/material.dart';
@@ -197,7 +198,8 @@ Future<Uint8List> _buildPdfInBackground(Map<String, dynamic> params) async {
                     ],
                   ),
                   pw.SizedBox(height: imageHeight * 0.02),
-                  // -- Fecha de pago --
+
+                  // Fecha de pago
                   pw.Row(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
@@ -215,7 +217,6 @@ Future<Uint8List> _buildPdfInBackground(Map<String, dynamic> params) async {
                       ),
                     ],
                   ),
-
                   pw.SizedBox(height: imageHeight * 0.02),
 
                   // Comprobante emitido por
@@ -282,6 +283,7 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
   late TextEditingController _issuerController;
   late TextEditingController _paymentDateController;
   late TextEditingController _passwordController;
+  late TextEditingController _searchController; // Para búsqueda
 
   DateTime? _selectedPaymentDate;
   bool _creating = false;
@@ -311,6 +313,7 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
     _issuerController = TextEditingController();
     _paymentDateController = TextEditingController();
     _passwordController = TextEditingController();
+    _searchController = TextEditingController(); // init búsqueda
     _selectedPaymentDate = DateTime.now();
     _fetchConfig();
   }
@@ -324,6 +327,7 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
     _issuerController.dispose();
     _paymentDateController.dispose();
     _passwordController.dispose();
+    _searchController.dispose(); // dispose búsqueda
     super.dispose();
   }
 
@@ -340,16 +344,12 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
       _configPassword = '';
     }
     if (!mounted) return;
-    setState(() {
-      _loadingConfig = false;
-    });
+    setState(() => _loadingConfig = false);
   }
 
   void _checkPassword() {
     if (_passwordController.text.trim() == _configPassword) {
-      setState(() {
-        _authenticated = true;
-      });
+      setState(() => _authenticated = true);
     } else {
       ScaffoldMessenger.of(
         context,
@@ -360,10 +360,7 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
 
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _creating = true;
-    });
+    setState(() => _creating = true);
 
     final pago = <String, dynamic>{
       'nombreBeneficiario': _beneficiaryController.text.trim(),
@@ -378,15 +375,11 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
     };
 
     final String pagoId = await FirestoreService.addPago(pago);
-
     if (!mounted) return;
-
     await _generatePdf(pagoId, pago);
 
     if (mounted) {
-      setState(() {
-        _creating = false;
-      });
+      setState(() => _creating = false);
       _formKey.currentState!.reset();
       _beneficiaryController.clear();
       _branch = branches.first;
@@ -407,26 +400,123 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
     String pagoId,
     Map<String, dynamic> datosPago,
   ) async {
-    // 1) Cargo la imagen de fondo desde assets
     final ByteData bytes = await rootBundle.load('assets/back.png');
     final Uint8List bgImage = bytes.buffer.asUint8List();
-
-    // 2) Preparo parámetros para el isolate
     final params = <String, dynamic>{
       'bgImage': bgImage,
       'pagoId': pagoId,
       'datosPago': datosPago,
     };
-
-    // 3) Construyo el PDF en background con compute
     final Uint8List pdfBytes = await _buildPdfInBackground(params);
-
     if (!mounted) return;
-
-    // 4) Comparto/descargo el PDF
     await Printing.sharePdf(
       bytes: pdfBytes,
       filename: 'comprobante_pago_$pagoId.pdf',
+    );
+  }
+
+  void _showSearchDialog() {
+    _searchController.clear();
+    bool loading = false;
+    Map<String, dynamic>? resultado;
+    String? error;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Buscar comprobante'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!loading && resultado == null && error == null) ...[
+                      TextField(
+                        controller: _searchController,
+                        decoration: const InputDecoration(
+                          labelText: 'ID de pago',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                    if (loading)
+                      const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    if (error != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(
+                          error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    if (resultado != null) ...[
+                      ...resultado!.entries.map(
+                        (e) => Text('${e.key}: ${e.value}'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                if (!loading && resultado == null) ...[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancelar'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final id = _searchController.text.trim();
+                      if (id.isEmpty) return;
+                      printLog('Buscando comprobante con ID: $id');
+                      setState(() {
+                        loading = true;
+                        error = null;
+                      });
+                      try {
+                        final doc =
+                            await FirebaseFirestore.instance
+                                .collection('TESORERIA')
+                                .doc('PAGOS')
+                                .collection('COMPROBANTES')
+                                .doc(id)
+                                .get();
+                        if (!doc.exists) {
+                          setState(() {
+                            error = 'No existe un comprobante con ese ID.';
+                            loading = false;
+                          });
+                        } else {
+                          setState(() {
+                            resultado = doc.data();
+                            loading = false;
+                          });
+                        }
+                      } catch (e) {
+                        setState(() {
+                          error = e.toString();
+                          loading = false;
+                        });
+                      }
+                    },
+                    child: const Text('Buscar'),
+                  ),
+                ] else if (resultado != null) ...[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cerrar'),
+                  ),
+                ],
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -631,7 +721,9 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
                             setState(() {
                               _selectedPaymentDate = picked;
                               _paymentDateController.text =
-                                  '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+                                  '${picked.day.toString().padLeft(2, '0')}/'
+                                  '${picked.month.toString().padLeft(2, '0')}/'
+                                  '${picked.year}';
                             });
                           }
                         },
@@ -671,6 +763,10 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
             ),
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showSearchDialog,
+        child: const Icon(Icons.search),
       ),
     );
   }
