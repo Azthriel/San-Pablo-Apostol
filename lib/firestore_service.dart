@@ -4,12 +4,14 @@ import 'package:eventosspa/master.dart';
 
 class FirestoreService {
   static final _fs = FirebaseFirestore.instance;
+
   static CollectionReference<Map<String, dynamic>> get _ordersCol =>
       _fs.collection('PASTELITOS').doc('Ordenes').collection('items');
+
   static DocumentReference<Map<String, dynamic>> get _totalsDoc =>
       _fs.collection('PASTELITOS').doc('Totales');
 
-  /// Guarda un pedido, inicializa docenasEntregadas a 0 y actualiza totales
+  /// Guarda un pedido y actualiza totales (pastelitos + churros)
   static Future<void> addOrder(Map<String, dynamic> order) async {
     final orderRef = _ordersCol.doc();
 
@@ -44,6 +46,8 @@ class FirestoreService {
       }
     }
 
+    final double churros = (order['churros'] as num? ?? 0).toDouble();
+
     final batch = _fs.batch();
 
     batch.set(orderRef, {
@@ -58,6 +62,7 @@ class FirestoreService {
           (order['paid'] as bool? ?? false)
               ? FieldValue.serverTimestamp()
               : null,
+      'churros': churros,
     });
 
     batch.set(_totalsDoc, {
@@ -66,6 +71,7 @@ class FirestoreService {
       'membrilloVegano': FieldValue.increment(membrilloVeg),
       'batataTrad': FieldValue.increment(batataTrad),
       'batataVegano': FieldValue.increment(batataVeg),
+      'totalChurros': FieldValue.increment(churros),
       'docenasEntregadas': FieldValue.increment(0),
     }, SetOptions(merge: true));
 
@@ -127,7 +133,7 @@ class FirestoreService {
     printLog('Entrega de pedido $orderId deshecha');
   }
 
-  /// Cancela un pedido y ajusta los totales (sin tocar docenasEntregadas)
+  /// Cancela un pedido y ajusta los totales
   static Future<void> cancelOrder(String orderId) async {
     final orderRef = _ordersCol.doc(orderId);
     final docSnap = await orderRef.get();
@@ -135,6 +141,7 @@ class FirestoreService {
     if (data == null) return;
 
     final num docenas = data['docenas'] as num? ?? 0;
+    final double churros = (data['churros'] as num? ?? 0).toDouble();
     double membrilloTrad = 0, membrilloVeg = 0, batataTrad = 0, batataVeg = 0;
     final flavors =
         (data['flavors'] as List<dynamic>).cast<Map<String, dynamic>>();
@@ -179,6 +186,7 @@ class FirestoreService {
       'membrilloVegano': FieldValue.increment(-membrilloVeg),
       'batataTrad': FieldValue.increment(-batataTrad),
       'batataVegano': FieldValue.increment(-batataVeg),
+      'totalChurros': FieldValue.increment(-churros),
     }, SetOptions(merge: true));
 
     await batch.commit();
@@ -198,6 +206,7 @@ class FirestoreService {
       'membrilloVegano': 0,
       'batataTrad': 0,
       'batataVegano': 0,
+      'totalChurros': 0,
       'docenasEntregadas': 0,
     });
     await batch.commit();
@@ -209,17 +218,14 @@ class FirestoreService {
     return _ordersCol.orderBy('createdAt', descending: false).snapshots();
   }
 
-  /// Guarda un pago en Tesorería (Colección: TESORERIA → Documento: "PAGOS" → Subcolección: "PAGOS" → Doc auto-ID)
+  /// Guarda un pago en Tesorería
   static Future<String> addPago(Map<String, dynamic> pago) async {
-    // Definimos la ruta: TESORERIA (colección) → PAGOS (documento) → PAGOS (subcolección)
     final CollectionReference<Map<String, dynamic>> pagosCol = _fs
         .collection('TESORERIA')
         .doc('PAGOS')
         .collection('COMPROBANTES');
 
     final DocumentReference<Map<String, dynamic>> docRef = pagosCol.doc();
-
-    // Agregamos también un campo createdAt con marca de tiempo
     await docRef.set({...pago, 'createdAt': FieldValue.serverTimestamp()});
 
     printLog('Pago ${docRef.id} guardado en Tesorería');

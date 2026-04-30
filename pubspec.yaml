@@ -1,8 +1,8 @@
 name: eventosspa
 description: "San Pablo Apostol."
-publish_to: "none" # Remove this line if you wish to publish to pub.dev
+publish_to: "none"
 
-version: 1.0.2+2
+version: 1.0.4+4
 
 environment:
   sdk: ^3.7.2
@@ -18,15 +18,19 @@ dependencies:
   intl: ^0.20.2
   pdf: ^3.11.3
   printing: ^5.14.2
+  url_launcher: ^6.3.0
   quarks_version_checker:
     git:
       url: https://github.com/quarks-studio/quarks_version_checker
+      ref: v1.1.0
+  quarks_footer:
+    git:
+      url: https://github.com/quarks-studio/quarks_footer
       ref: v1.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^5.0.0
   flutter_launcher_icons: "^0.14.3"
 
@@ -35,16 +39,11 @@ flutter_launcher_icons:
   web:
     generate: true
     image_path: "assets/flor.png"
-    background_color: "#673AB7"
-    theme_color: "#673AB7"
+    background_color: "#33691E"
+    theme_color: "#33691E"
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
 flutter:
   uses-material-design: true
-
   assets:
     - assets/spa.png
     - assets/back.png

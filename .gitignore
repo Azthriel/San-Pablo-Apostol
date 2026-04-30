@@ -57,5 +57,6 @@ firestore.rules
 .metadata
 lib/firebase_options.dart
 .firebaserc
-
+pubspec.lock
 assets/back.png
+analysis_options.yaml

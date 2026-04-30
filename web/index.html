@@ -1,38 +1,59 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="San Pablo Apostol.">
-
-  <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="eventosspa">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
+  <link rel="icon" type="image/png" href="favicon.png" />
   <title>San Pablo Apostol</title>
   <link rel="manifest" href="manifest.json">
 </head>
+
 <body>
+  <!-- Helpers para PDF: descarga directa y Web Share API con archivo adjunto -->
+  <script>
+    // Descarga un ArrayBuffer como PDF via Blob URL (sin pasar por el paquete printing)
+    window.spaDownloadBlob = function (buffer, filename) {
+      const blob = new Blob([buffer], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    // Comparte un PDF via Web Share API (Chrome/Safari mobile → muestra WhatsApp, Gmail, etc.)
+    // Retorna Promise<boolean>: true si el share fue exitoso, false si no está soportado o el usuario canceló
+    window.spaShareFile = async function (buffer, filename) {
+      try {
+        if (typeof navigator.share !== 'function') return false;
+        const blob = new Blob([buffer], { type: 'application/pdf' });
+        const file = new File([blob], filename, { type: 'application/pdf' });
+        const shareData = { files: [file], title: 'Comprobante de pago' };
+        if (navigator.canShare && !navigator.canShare(shareData)) return false;
+        await navigator.share(shareData);
+        return true;
+      } catch (e) {
+        return false; // AbortError (usuario canceló) u otro error
+      }
+    };
+
+    // Detecta si el browser soporta Web Share API (disponible en mobile Chrome/Safari)
+    window.spaSupportsShare = function () {
+      return typeof navigator.share === 'function';
+    };
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
+
 </html>
