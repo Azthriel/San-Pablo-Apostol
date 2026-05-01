@@ -409,7 +409,10 @@ class HomePageState extends State<HomePage> {
               ),
             ],
           ),
-          const QuarksFooter(),
+          const QuarksFooter(
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+          ),
         ],
       ),
     );
