@@ -51,7 +51,6 @@ ios/
 macos/
 windows/
 .firebase/
-firebase.json
 firestore.indexes.json
 firestore.rules
 .metadata
