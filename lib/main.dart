@@ -1,7 +1,9 @@
 // main.dart
 import 'package:eventosspa/firebase_options.dart';
-import 'package:eventosspa/orders.dart';
 import 'package:eventosspa/orders_list.dart';
+import 'package:eventosspa/payment_success_page.dart';
+import 'package:eventosspa/purchase_page.dart';
+import 'package:eventosspa/qr_scanner_page.dart';
 import 'package:eventosspa/tesoreria_page.dart';
 import 'package:eventosspa/totals_page.dart';
 import 'package:eventosspa/firestore_service.dart';
@@ -34,9 +36,36 @@ class EventosSPA extends StatelessWidget {
       title: 'San Pablo Apóstol',
       theme: _buildTheme(),
       initialRoute: '/',
-      routes: {
-        '/': (context) => const HomePage(),
-        '/tesoreria': (context) => const TesoreriaPage(),
+      onGenerateRoute: (settings) {
+        // Parseamos la URL entrante, incluyendo sus parámetros
+        final uri = Uri.parse(settings.name ?? '/');
+
+        // Evaluamos solo el "path" (ej: /pago-ok) e ignoramos lo que viene después del "?"
+        switch (uri.path) {
+          case '/':
+            return MaterialPageRoute(
+              builder: (_) => const HomePage(),
+              settings:
+                  settings, // Pasamos los settings para no perder la URL original
+            );
+          case '/tesoreria':
+            return MaterialPageRoute(
+              builder: (_) => const TesoreriaPage(),
+              settings: settings,
+            );
+          case '/pago-ok':
+          case '/pago-fallido':
+          case '/pago-pendiente':
+            return MaterialPageRoute(
+              builder: (_) => const PaymentSuccessPage(),
+              settings: settings,
+            );
+          default:
+            return MaterialPageRoute(
+              builder: (_) => const HomePage(),
+              settings: settings,
+            );
+        }
       },
       debugShowCheckedModeBanner: false,
     );
@@ -224,6 +253,7 @@ class HomePageState extends State<HomePage> {
   final TextEditingController _passwordController = TextEditingController();
   late String _listPassword;
   bool _loadingPassword = true;
+  bool _readerAuthenticated = false;
 
   @override
   void initState() {
@@ -299,15 +329,27 @@ class HomePageState extends State<HomePage> {
   }
 
   void _checkPassword(BuildContext ctx) {
-    if (_passwordController.text == _listPassword) {
+    final entered = _passwordController.text;
+    if (entered == _listPassword) {
       setState(() {
         _authenticated = true;
+        _readerAuthenticated = true;
         _currentIndex = 2;
       });
       Navigator.pop(ctx);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('✅ Autenticación exitosa')));
+      ).showSnackBar(const SnackBar(content: Text('✅ Acceso administrador')));
+    } else if (entered == _listPassword /* readerPass */ ) {
+      // Acá cargá el readerPass de Firestore igual que listPassword
+      setState(() {
+        _readerAuthenticated = true;
+        _currentIndex = 2;
+      });
+      Navigator.pop(ctx);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('✅ Acceso lector')));
     } else {
       ScaffoldMessenger.of(
         context,
@@ -356,9 +398,12 @@ class HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      const OrderPage(),
-      const TotalsPage(),
-      const OrdersListPage(),
+      const PurchasePage(), // tab 0 - público
+      const TotalsPage(), // tab 1 - público
+      OrdersListPage(
+        isAdmin: _authenticated,
+        isReader: _readerAuthenticated,
+      ), // tab 2 - requiere auth
     ];
 
     return Scaffold(
@@ -376,6 +421,16 @@ class HomePageState extends State<HomePage> {
                 onPressed: _confirmReset,
               ),
             ),
+          if (_currentIndex == 2 && _readerAuthenticated)
+            IconButton(
+              icon: const Icon(Icons.qr_code_scanner),
+              tooltip: 'Escanear talonario',
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const QrScannerPage()),
+                  ),
+            ),
         ],
       ),
       body: pages[_currentIndex],
@@ -385,7 +440,7 @@ class HomePageState extends State<HomePage> {
           NavigationBar(
             selectedIndex: _currentIndex,
             onDestinationSelected: (i) {
-              if (i == 2 && !_authenticated) {
+              if (i == 2 && !_readerAuthenticated && !_authenticated) {
                 _showAuthDialog();
               } else {
                 setState(() => _currentIndex = i);
@@ -393,9 +448,9 @@ class HomePageState extends State<HomePage> {
             },
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.shopping_bag_outlined),
-                selectedIcon: Icon(Icons.shopping_bag),
-                label: 'Pedidos',
+                icon: Icon(Icons.shopping_cart_outlined),
+                selectedIcon: Icon(Icons.shopping_cart),
+                label: 'Comprar',
               ),
               NavigationDestination(
                 icon: Icon(Icons.bar_chart_outlined),

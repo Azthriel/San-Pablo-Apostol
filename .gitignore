@@ -61,3 +61,4 @@ assets/back.png
 analysis_options.yaml
 deploy.sh
 deploy.bat
+lib/secret.dart

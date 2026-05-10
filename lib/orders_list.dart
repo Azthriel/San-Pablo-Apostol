@@ -1,11 +1,22 @@
 // orders_list.dart
 import 'package:eventosspa/firestore_service.dart';
+import 'package:eventosspa/orders.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+// Convierte String o num a num de forma segura (protege contra docs corruptos de Firestore)
+num _safeNum(dynamic v) =>
+    v is num ? v : num.tryParse(v?.toString() ?? '') ?? 0;
+
 class OrdersListPage extends StatefulWidget {
-  const OrdersListPage({super.key});
+  final bool isAdmin;
+  final bool isReader;
+  const OrdersListPage({
+    super.key,
+    this.isAdmin = false,
+    this.isReader = false,
+  });
   @override
   _OrdersListPageState createState() => _OrdersListPageState();
 }
@@ -106,6 +117,7 @@ class _OrdersListPageState extends State<OrdersListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final canAdd = widget.isAdmin || widget.isReader;
     final baseStream =
         FirebaseFirestore.instance
             .collection('PASTELITOS')
@@ -114,319 +126,353 @@ class _OrdersListPageState extends State<OrdersListPage> {
             .orderBy('createdAt', descending: false)
             .snapshots();
 
-    return Column(
+    return Stack(
       children: [
-        // Botón filtros
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Row(
-            children: [
-              Text(
-                'Lista de pedidos',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const Spacer(),
-              FilledButton.tonalIcon(
-                icon: Icon(
-                  showFilters ? Icons.filter_alt_off : Icons.filter_alt,
-                  size: 18,
-                ),
-                label: Text(showFilters ? 'Ocultar' : 'Filtros'),
-                onPressed: () => setState(() => showFilters = !showFilters),
-                style: FilledButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Panel de filtros
-        if (showFilters)
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+        Column(
+          children: [
+            // Botón filtros
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Row(
                 children: [
-                  _buildFilterRow(
-                    children: [
-                      _FilterField(
-                        label: 'Rama',
-                        child: DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(isDense: true),
-                          initialValue: branchFilter,
-                          items:
-                              branches
-                                  .map(
-                                    (b) => DropdownMenuItem(
-                                      value: b,
-                                      child: Text(b),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (v) => setState(() => branchFilter = v!),
-                        ),
-                      ),
-                      _FilterField(
-                        label: 'Vendedor',
-                        child: TextField(
-                          controller: _sellerFilterController,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            hintText: 'Buscar...',
-                            suffixIcon:
-                                sellerFilter.isNotEmpty
-                                    ? IconButton(
-                                      icon: const Icon(Icons.clear, size: 18),
-                                      onPressed: () {
-                                        _sellerFilterController.clear();
-                                        setState(() => sellerFilter = '');
-                                      },
-                                    )
-                                    : null,
-                          ),
-                          onChanged: (v) => setState(() => sellerFilter = v),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'Lista de pedidos',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  _buildFilterRow(
-                    children: [
-                      _FilterField(
-                        label: 'Estado pago',
-                        child: DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(isDense: true),
-                          initialValue: paymentStatusFilter,
-                          items:
-                              paymentStatusOptions
-                                  .map(
-                                    (s) => DropdownMenuItem(
-                                      value: s,
-                                      child: Text(s),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged:
-                              (v) => setState(() => paymentStatusFilter = v!),
-                        ),
-                      ),
-                      _FilterField(
-                        label: 'Método de pago',
-                        child: DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(isDense: true),
-                          initialValue: paymentMethodFilter,
-                          items:
-                              paymentMethodsList
-                                  .map(
-                                    (m) => DropdownMenuItem(
-                                      value: m,
-                                      child: Text(m),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged:
-                              (v) => setState(() => paymentMethodFilter = v!),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildFilterRow(
-                    children: [
-                      _FilterField(
-                        label: 'Entrega',
-                        child: DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(isDense: true),
-                          initialValue: deliveryFilter,
-                          items:
-                              deliveryOptions
-                                  .map(
-                                    (d) => DropdownMenuItem(
-                                      value: d,
-                                      child: Text(d),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (v) => setState(() => deliveryFilter = v!),
-                        ),
-                      ),
-                      _FilterField(
-                        label: 'Combinación',
-                        child: DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(isDense: true),
-                          initialValue: combinedFilter,
-                          items:
-                              combinedOptions
-                                  .map(
-                                    (c) => DropdownMenuItem(
-                                      value: c,
-                                      child: Text(c),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (v) => setState(() => combinedFilter = v!),
-                        ),
-                      ),
-                    ],
+                  const Spacer(),
+                  FilledButton.tonalIcon(
+                    icon: Icon(
+                      showFilters ? Icons.filter_alt_off : Icons.filter_alt,
+                      size: 18,
+                    ),
+                    label: Text(showFilters ? 'Ocultar' : 'Filtros'),
+                    onPressed: () => setState(() => showFilters = !showFilters),
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
 
-        // Lista
-        Expanded(
-          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: baseStream,
-            builder: (context, snap) {
-              if (snap.hasError) return const Center(child: Text('Error'));
-              if (!snap.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final allDocs = snap.data!.docs;
-              final filteredDocs =
-                  allDocs.where((d) {
-                    final o = d.data();
-                    if (branchFilter != 'Todas' &&
-                        o['sellerBranch'] != branchFilter) {
-                      return false;
-                    }
-                    if (sellerFilter.isNotEmpty &&
-                        !o['sellerName'].toString().toLowerCase().contains(
-                          sellerFilter.toLowerCase(),
-                        )) {
-                      return false;
-                    }
-                    final paid = o['paid'] as bool? ?? false;
-                    if (paymentStatusFilter == 'Pagados' && !paid) return false;
-                    if (paymentStatusFilter == 'No pagados' && paid) {
-                      return false;
-                    }
-                    if (paymentMethodFilter != 'Todos' &&
-                        o['paymentMethod'] != paymentMethodFilter) {
-                      return false;
-                    }
-                    final delivered = o['delivered'] as bool? ?? false;
-                    if (deliveryFilter == 'Entregados' && !delivered) {
-                      return false;
-                    }
-                    if (deliveryFilter == 'Pendientes' && delivered) {
-                      return false;
-                    }
-                    if (combinedFilter != 'Todos') {
-                      final docFlavors =
-                          (o['flavors'] as List).cast<Map<String, dynamic>>();
-                      final parts = combinedFilter.split(' ');
-                      final sizePart = parts[0];
-                      if (parts[1].toLowerCase() == 'mixta') {
-                        if (docFlavors.length < 2) return false;
-                        if (parts.length == 3) {
-                          final typePart = parts[2];
-                          if (!docFlavors.every((f) => f['type'] == typePart)) {
-                            return false;
-                          }
-                        }
-                      } else {
-                        final flavorPart = parts[1].toLowerCase();
-                        final hasMatch = docFlavors.any((f) {
-                          final matchSize = f['size'] == sizePart;
-                          final matchFlavor =
-                              f['flavor'].toString().toLowerCase() ==
-                              flavorPart;
-                          final matchType =
-                              parts.length == 3
-                                  ? f['type'].toString().toLowerCase() ==
-                                      parts[2].toLowerCase()
-                                  : true;
-                          return matchSize && matchFlavor && matchType;
-                        });
-                        if (!hasMatch) return false;
-                      }
-                    }
-                    return true;
-                  }).toList();
-
-              if (filteredDocs.isEmpty) {
-                return Center(
+            // Panel de filtros
+            if (showFilters)
+              Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Icon(
-                        Icons.inbox_outlined,
-                        size: 64,
-                        color: Colors.grey.shade300,
+                      _buildFilterRow(
+                        children: [
+                          _FilterField(
+                            label: 'Rama',
+                            child: DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(isDense: true),
+                              initialValue: branchFilter,
+                              items:
+                                  branches
+                                      .map(
+                                        (b) => DropdownMenuItem(
+                                          value: b,
+                                          child: Text(b),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (v) => setState(() => branchFilter = v!),
+                            ),
+                          ),
+                          _FilterField(
+                            label: 'Vendedor',
+                            child: TextField(
+                              controller: _sellerFilterController,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                hintText: 'Buscar...',
+                                suffixIcon:
+                                    sellerFilter.isNotEmpty
+                                        ? IconButton(
+                                          icon: const Icon(
+                                            Icons.clear,
+                                            size: 18,
+                                          ),
+                                          onPressed: () {
+                                            _sellerFilterController.clear();
+                                            setState(() => sellerFilter = '');
+                                          },
+                                        )
+                                        : null,
+                              ),
+                              onChanged:
+                                  (v) => setState(() => sellerFilter = v),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No hay pedidos',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleMedium?.copyWith(color: Colors.grey),
+                      const SizedBox(height: 8),
+                      _buildFilterRow(
+                        children: [
+                          _FilterField(
+                            label: 'Estado pago',
+                            child: DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(isDense: true),
+                              initialValue: paymentStatusFilter,
+                              items:
+                                  paymentStatusOptions
+                                      .map(
+                                        (s) => DropdownMenuItem(
+                                          value: s,
+                                          child: Text(s),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (v) =>
+                                      setState(() => paymentStatusFilter = v!),
+                            ),
+                          ),
+                          _FilterField(
+                            label: 'Método de pago',
+                            child: DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(isDense: true),
+                              initialValue: paymentMethodFilter,
+                              items:
+                                  paymentMethodsList
+                                      .map(
+                                        (m) => DropdownMenuItem(
+                                          value: m,
+                                          child: Text(m),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (v) =>
+                                      setState(() => paymentMethodFilter = v!),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _buildFilterRow(
+                        children: [
+                          _FilterField(
+                            label: 'Entrega',
+                            child: DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(isDense: true),
+                              initialValue: deliveryFilter,
+                              items:
+                                  deliveryOptions
+                                      .map(
+                                        (d) => DropdownMenuItem(
+                                          value: d,
+                                          child: Text(d),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (v) => setState(() => deliveryFilter = v!),
+                            ),
+                          ),
+                          _FilterField(
+                            label: 'Combinación',
+                            child: DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(isDense: true),
+                              initialValue: combinedFilter,
+                              items:
+                                  combinedOptions
+                                      .map(
+                                        (c) => DropdownMenuItem(
+                                          value: c,
+                                          child: Text(c),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (v) => setState(() => combinedFilter = v!),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                );
-              }
+                ),
+              ),
 
-              return Column(
-                children: [
-                  if (filteredDocs.length != allDocs.length)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
+            // Lista
+            Expanded(
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: baseStream,
+                builder: (context, snap) {
+                  if (snap.hasError) return const Center(child: Text('Error'));
+                  if (!snap.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final allDocs = snap.data!.docs;
+                  final filteredDocs =
+                      allDocs.where((d) {
+                        final o = d.data();
+                        if (branchFilter != 'Todas' &&
+                            o['sellerBranch'] != branchFilter) {
+                          return false;
+                        }
+                        if (sellerFilter.isNotEmpty &&
+                            !o['sellerName'].toString().toLowerCase().contains(
+                              sellerFilter.toLowerCase(),
+                            )) {
+                          return false;
+                        }
+                        final paid = o['paid'] as bool? ?? false;
+                        if (paymentStatusFilter == 'Pagados' && !paid) {
+                          return false;
+                        }
+                        if (paymentStatusFilter == 'No pagados' && paid) {
+                          return false;
+                        }
+                        if (paymentMethodFilter != 'Todos' &&
+                            o['paymentMethod'] != paymentMethodFilter) {
+                          return false;
+                        }
+                        final delivered = o['delivered'] as bool? ?? false;
+                        if (deliveryFilter == 'Entregados' && !delivered) {
+                          return false;
+                        }
+                        if (deliveryFilter == 'Pendientes' && delivered) {
+                          return false;
+                        }
+                        if (combinedFilter != 'Todos') {
+                          final docFlavors =
+                              (o['flavors'] as List)
+                                  .cast<Map<String, dynamic>>();
+                          final parts = combinedFilter.split(' ');
+                          final sizePart = parts[0];
+                          if (parts[1].toLowerCase() == 'mixta') {
+                            if (docFlavors.length < 2) return false;
+                            if (parts.length == 3) {
+                              final typePart = parts[2];
+                              if (!docFlavors.every(
+                                (f) => f['type'] == typePart,
+                              )) {
+                                return false;
+                              }
+                            }
+                          } else {
+                            final flavorPart = parts[1].toLowerCase();
+                            final hasMatch = docFlavors.any((f) {
+                              final matchSize = f['size'] == sizePart;
+                              final matchFlavor =
+                                  f['flavor'].toString().toLowerCase() ==
+                                  flavorPart;
+                              final matchType =
+                                  parts.length == 3
+                                      ? f['type'].toString().toLowerCase() ==
+                                          parts[2].toLowerCase()
+                                      : true;
+                              return matchSize && matchFlavor && matchType;
+                            });
+                            if (!hasMatch) return false;
+                          }
+                        }
+                        return true;
+                      }).toList();
+
+                  if (filteredDocs.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.inbox_outlined,
+                            size: 64,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No hay pedidos',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(color: Colors.grey),
+                          ),
+                        ],
                       ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '${filteredDocs.length} de ${allDocs.length} pedidos',
-                          style: Theme.of(context).textTheme.bodySmall,
+                    );
+                  }
+
+                  return Column(
+                    children: [
+                      if (filteredDocs.length != allDocs.length)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '${filteredDocs.length} de ${allDocs.length} pedidos',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            // En pantallas anchas mostramos 2 columnas
+                            if (constraints.maxWidth > 700) {
+                              return GridView.builder(
+                                padding: const EdgeInsets.all(16),
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      childAspectRatio: 0.72,
+                                    ),
+                                itemCount: filteredDocs.length,
+                                itemBuilder:
+                                    (_, i) => _buildOrderCard(
+                                      context,
+                                      filteredDocs[i],
+                                    ),
+                              );
+                            }
+                            return ListView.separated(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: filteredDocs.length,
+                              separatorBuilder:
+                                  (_, __) => const SizedBox(height: 12),
+                              itemBuilder:
+                                  (_, i) =>
+                                      _buildOrderCard(context, filteredDocs[i]),
+                            );
+                          },
                         ),
                       ),
-                    ),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        // En pantallas anchas mostramos 2 columnas
-                        if (constraints.maxWidth > 700) {
-                          return GridView.builder(
-                            padding: const EdgeInsets.all(16),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: 0.72,
-                                ),
-                            itemCount: filteredDocs.length,
-                            itemBuilder:
-                                (_, i) =>
-                                    _buildOrderCard(context, filteredDocs[i]),
-                          );
-                        }
-                        return ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filteredDocs.length,
-                          separatorBuilder:
-                              (_, __) => const SizedBox(height: 12),
-                          itemBuilder:
-                              (_, i) =>
-                                  _buildOrderCard(context, filteredDocs[i]),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
+
+        if (canAdd)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton.extended(
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const OrderPage()),
+                  ),
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar pedido'),
+            ),
+          ),
       ],
     );
   }
@@ -444,7 +490,7 @@ class _OrdersListPageState extends State<OrdersListPage> {
     final canceled = o['canceled'] as bool? ?? false;
     final canceledAt = (o['canceledAt'] as Timestamp?)?.toDate();
     final paymentMethod = o['paymentMethod'] as String? ?? '';
-    final churros = (o['churros'] as num? ?? 0).toDouble();
+    final churros = _safeNum(o['churros']).toDouble();
 
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -520,7 +566,7 @@ class _OrdersListPageState extends State<OrdersListPage> {
                   children: [
                     _InfoChip(
                       icon: Icons.confirmation_number_outlined,
-                      label: _docenaLabel(o['docenas'] as num? ?? 0),
+                      label: _docenaLabel(_safeNum(o['docenas'])),
                     ),
                     _InfoChip(
                       icon:

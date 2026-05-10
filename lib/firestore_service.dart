@@ -12,7 +12,7 @@ class FirestoreService {
       _fs.collection('PASTELITOS').doc('Totales');
 
   /// Guarda un pedido y actualiza totales (pastelitos + churros)
-  static Future<void> addOrder(Map<String, dynamic> order) async {
+  static Future<String> addOrder(Map<String, dynamic> order) async {
     final orderRef = _ordersCol.doc();
 
     double membrilloTrad = 0, membrilloVeg = 0, batataTrad = 0, batataVeg = 0;
@@ -77,6 +77,8 @@ class FirestoreService {
 
     await batch.commit();
     printLog('Pedido guardado y totales actualizados.');
+    printLog('Pedido guardado: ${orderRef.id}');
+    return orderRef.id;
   }
 
   /// Marca un pedido como pagado
