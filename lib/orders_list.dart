@@ -1,9 +1,15 @@
 // orders_list.dart
+import 'dart:convert';
+import 'dart:js_interop';
 import 'package:eventosspa/firestore_service.dart';
 import 'package:eventosspa/orders.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+
+// ─── JS interop para exportar Excel via SheetJS (web/index.html) ──────────────
+@JS('spaDownloadExcel')
+external void _jsDownloadExcel(String jsonData, String filename);
 
 // Convierte String o num a num de forma segura (protege contra docs corruptos de Firestore)
 num _safeNum(dynamic v) =>
@@ -23,6 +29,10 @@ class OrdersListPage extends StatefulWidget {
 
 class _OrdersListPageState extends State<OrdersListPage> {
   bool showFilters = false;
+
+  // Docs filtrados actualmente — se actualiza en cada rebuild del StreamBuilder
+  // para que el botón de exportar siempre exporte lo que se está viendo.
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _currentFilteredDocs = [];
 
   String branchFilter = 'Todas';
   String sellerFilter = '';
@@ -66,6 +76,75 @@ class _OrdersListPageState extends State<OrdersListPage> {
   void dispose() {
     _sellerFilterController.dispose();
     super.dispose();
+  }
+
+  // ── Exportar pedidos filtrados a .xlsx ──────────────────────────────────────
+  void _exportToExcel() {
+    if (_currentFilteredDocs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay pedidos para exportar')),
+      );
+      return;
+    }
+
+    final rows = <List<dynamic>>[];
+
+    // Encabezados
+    rows.add([
+      'Nº',
+      'Comprador',
+      'Vendedor',
+      'Rama',
+      'Doc. Pastelitos',
+      'Churros',
+      'Sabores',
+      'Método pago',
+      'Pagado',
+      'Entregado',
+      'Fecha',
+    ]);
+
+    for (int i = 0; i < _currentFilteredDocs.length; i++) {
+      final o = _currentFilteredDocs[i].data();
+      final flavors =
+          (o['flavors'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+      final sabores = flavors
+          .map((f) => '${f["size"]} ${f["flavor"]} (${f["type"]})')
+          .join(' | ');
+
+      DateTime? createdAt;
+      if (o['createdAt'] is Timestamp) {
+        createdAt = (o['createdAt'] as Timestamp).toDate();
+      }
+
+      rows.add([
+        i + 1,
+        o['buyerName']?.toString() ?? '',
+        o['sellerName']?.toString() ?? '',
+        o['sellerBranch']?.toString() ?? '',
+        _safeNum(o['docenas']).toDouble(),
+        _safeNum(o['churros']).toDouble(),
+        sabores,
+        o['paymentMethod']?.toString() ?? '',
+        (o['paid'] as bool? ?? false) ? 'Sí' : 'No',
+        (o['delivered'] as bool? ?? false) ? 'Sí' : 'No',
+        createdAt != null
+            ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt)
+            : '',
+      ]);
+    }
+
+    final filename =
+        'pedidos_${DateFormat("yyyyMMdd_HHmm").format(DateTime.now())}.xlsx';
+    _jsDownloadExcel(jsonEncode(rows), filename);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '📊 Excel exportado (${_currentFilteredDocs.length} pedidos)',
+        ),
+      ),
+    );
   }
 
   String _docenaLabel(num val) {
@@ -142,6 +221,15 @@ class _OrdersListPageState extends State<OrdersListPage> {
                     ),
                   ),
                   const Spacer(),
+                  // Exportar a Excel
+                  if (widget.isAdmin || widget.isReader) ...[
+                    IconButton.filledTonal(
+                      icon: const Icon(Icons.table_chart_outlined, size: 20),
+                      tooltip: 'Exportar a Excel (.xlsx)',
+                      onPressed: _exportToExcel,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   FilledButton.tonalIcon(
                     icon: Icon(
                       showFilters ? Icons.filter_alt_off : Icons.filter_alt,
@@ -379,6 +467,13 @@ class _OrdersListPageState extends State<OrdersListPage> {
                         }
                         return true;
                       }).toList();
+
+                  // Mantener referencia a los docs filtrados para el botón de exportar
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      setState(() => _currentFilteredDocs = filteredDocs);
+                    }
+                  });
 
                   if (filteredDocs.isEmpty) {
                     return Center(

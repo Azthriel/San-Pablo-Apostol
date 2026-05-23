@@ -13,10 +13,12 @@
   <link rel="icon" type="image/png" href="favicon.png" />
   <title>San Pablo Apostol</title>
   <link rel="manifest" href="manifest.json">
+  <!-- SheetJS para exportar pedidos a .xlsx -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 
 <body>
-  <!-- Helpers para PDF: descarga directa y Web Share API con archivo adjunto -->
+  <!-- Helpers para PDF/Excel: descarga directa y Web Share API con archivo adjunto -->
   <script>
     // Descarga un ArrayBuffer como PDF via Blob URL (sin pasar por el paquete printing)
     window.spaDownloadBlob = function (buffer, filename) {
@@ -50,6 +52,73 @@
     // Detecta si el browser soporta Web Share API (disponible en mobile Chrome/Safari)
     window.spaSupportsShare = function () {
       return typeof navigator.share === 'function';
+    };
+
+    // Genera y descarga un .xlsx a partir de un JSON (array de arrays) usando SheetJS
+    // La primera fila se trata como encabezado y recibe formato especial.
+    window.spaDownloadExcel = function (jsonString, filename) {
+      const rows = JSON.parse(jsonString);
+      if (!rows || rows.length === 0) return;
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+
+      // ── Anchos de columna ──────────────────────────────────────────────
+      ws['!cols'] = [
+        { wch: 4 },  // Nº
+        { wch: 24 },  // Comprador
+        { wch: 20 },  // Vendedor
+        { wch: 14 },  // Rama
+        { wch: 12 },  // Doc. Pastelitos
+        { wch: 10 },  // Churros
+        { wch: 40 },  // Sabores
+        { wch: 14 },  // Método pago
+        { wch: 9 },  // Pagado
+        { wch: 11 },  // Entregado
+        { wch: 17 },  // Fecha
+      ];
+
+      // ── Fila fija (freeze primera fila) ───────────────────────────────
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+      // ── Auto-filtro en encabezados ─────────────────────────────────────
+      const numCols = rows[0].length;
+      const lastCol = XLSX.utils.encode_col(numCols - 1);
+      ws['!autofilter'] = { ref: `A1:${lastCol}1` };
+
+      // ── Estilos (requiere xlsx con soporte de estilos) ─────────────────
+      const headerStyle = {
+        font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
+        fill: { fgColor: { rgb: '006A40' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: { bottom: { style: 'medium', color: { rgb: '004D2E' } } },
+      };
+
+      for (let c = 0; c < numCols; c++) {
+        const cellAddr = XLSX.utils.encode_cell({ r: 0, c });
+        if (ws[cellAddr]) ws[cellAddr].s = headerStyle;
+      }
+
+      for (let r = 1; r < rows.length; r++) {
+        const rowBg = r % 2 === 0 ? 'F0F7F4' : 'FFFFFF';
+        for (let c = 0; c < numCols; c++) {
+          const cellAddr = XLSX.utils.encode_cell({ r, c });
+          if (!ws[cellAddr]) continue;
+          const isNumber = typeof rows[r][c] === 'number';
+          const centerCols = new Set([0, 4, 5, 8, 9]);
+          ws[cellAddr].s = {
+            fill: { fgColor: { rgb: rowBg } },
+            alignment: {
+              horizontal: (isNumber || centerCols.has(c)) ? 'center' : 'left',
+              vertical: 'center',
+            },
+            ...(isNumber ? { numFmt: '0.##' } : {}),
+          };
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Pedidos');
+      XLSX.writeFile(wb, filename);
     };
   </script>
 
