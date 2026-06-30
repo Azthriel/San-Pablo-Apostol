@@ -112,6 +112,7 @@ class FirestoreService {
       'batataVegano': FieldValue.increment(batataVeg),
       'totalChurros': FieldValue.increment(churros),
       'docenasEntregadas': FieldValue.increment(0),
+      'churrosEntregados': FieldValue.increment(0),
     }, SetOptions(merge: true));
 
     await batch.commit();
@@ -135,13 +136,15 @@ class FirestoreService {
     printLog('Pago de pedido $orderId deshecho');
   }
 
-  /// Marca un pedido como entregado y actualiza docenasEntregadas
+  /// Marca un pedido como entregado y actualiza docenasEntregadas y
+  /// churrosEntregados
   static Future<void> markDelivered(String orderId) async {
     final orderRef = _ordersCol.doc(orderId);
     final docSnap = await orderRef.get();
     final data = docSnap.data();
     if (data == null) return;
     final num docenas = data['docenas'] as num? ?? 0;
+    final double churros = (data['churros'] as num? ?? 0).toDouble();
 
     final batch = _fs.batch();
     batch.update(orderRef, {
@@ -150,24 +153,27 @@ class FirestoreService {
     });
     batch.set(_totalsDoc, {
       'docenasEntregadas': FieldValue.increment(docenas),
+      'churrosEntregados': FieldValue.increment(churros),
     }, SetOptions(merge: true));
 
     await batch.commit();
     printLog('Pedido $orderId marcado como entregado');
   }
 
-  /// Deshace la entrega y actualiza docenasEntregadas
+  /// Deshace la entrega y actualiza docenasEntregadas y churrosEntregados
   static Future<void> unmarkDelivered(String orderId) async {
     final orderRef = _ordersCol.doc(orderId);
     final docSnap = await orderRef.get();
     final data = docSnap.data();
     if (data == null) return;
     final num docenas = data['docenas'] as num? ?? 0;
+    final double churros = (data['churros'] as num? ?? 0).toDouble();
 
     final batch = _fs.batch();
     batch.update(orderRef, {'delivered': false, 'deliveredAt': null});
     batch.set(_totalsDoc, {
       'docenasEntregadas': FieldValue.increment(-docenas),
+      'churrosEntregados': FieldValue.increment(-churros),
     }, SetOptions(merge: true));
 
     await batch.commit();
@@ -183,6 +189,7 @@ class FirestoreService {
 
     final num docenas = data['docenas'] as num? ?? 0;
     final double churros = (data['churros'] as num? ?? 0).toDouble();
+    final bool delivered = data['delivered'] as bool? ?? false;
     double membrilloTrad = 0, membrilloVeg = 0, batataTrad = 0, batataVeg = 0;
     final flavors =
         (data['flavors'] as List<dynamic>).cast<Map<String, dynamic>>();
@@ -228,6 +235,10 @@ class FirestoreService {
       'batataTrad': FieldValue.increment(-batataTrad),
       'batataVegano': FieldValue.increment(-batataVeg),
       'totalChurros': FieldValue.increment(-churros),
+      if (delivered) ...{
+        'docenasEntregadas': FieldValue.increment(-docenas),
+        'churrosEntregados': FieldValue.increment(-churros),
+      },
     }, SetOptions(merge: true));
 
     await batch.commit();
@@ -292,7 +303,10 @@ class FirestoreService {
         'batataTrad': FieldValue.increment(-batataTrad),
         'batataVegano': FieldValue.increment(-batataVeg),
         'totalChurros': FieldValue.increment(-churros),
-        if (delivered) 'docenasEntregadas': FieldValue.increment(-docenas),
+        if (delivered) ...{
+          'docenasEntregadas': FieldValue.increment(-docenas),
+          'churrosEntregados': FieldValue.increment(-churros),
+        },
       }, SetOptions(merge: true));
     }
 
@@ -316,6 +330,7 @@ class FirestoreService {
       'batataVegano': 0,
       'totalChurros': 0,
       'docenasEntregadas': 0,
+      'churrosEntregados': 0,
     });
     await batch.commit();
     printLog('Todos los pedidos eliminados y totales reiniciados.');

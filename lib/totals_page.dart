@@ -90,6 +90,139 @@ class _TotalsPageState extends State<TotalsPage> {
     );
   }
 
+  Widget _buildProgressCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required num total,
+    required num delivered,
+    required Color color,
+  }) {
+    final pending = total - delivered;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  _docenaLabel(total),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+
+            // Barra de progreso entregados
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '📦 Entregadas',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          Text(
+                            _docenaLabel(delivered),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value:
+                              total > 0
+                                  ? (delivered / total)
+                                      .clamp(0.0, 1.0)
+                                      .toDouble()
+                                  : 0,
+                          minHeight: 8,
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor: const AlwaysStoppedAnimation(
+                            Colors.green,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '⌛ Pendientes',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          Text(
+                            _docenaLabel(pending),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -120,7 +253,7 @@ class _TotalsPageState extends State<TotalsPage> {
               final batataVeg = data['batataVegano'] as num? ?? 0;
               final totalChurros = data['totalChurros'] as num? ?? 0;
               final delivered = data['docenasEntregadas'] as num? ?? 0;
-              final pending = totalDoc - delivered;
+              final churrosDelivered = data['churrosEntregados'] as num? ?? 0;
 
               final colorScheme = Theme.of(context).colorScheme;
 
@@ -128,139 +261,14 @@ class _TotalsPageState extends State<TotalsPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // ── Encabezado total ─────────────────────────
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.auto_stories,
-                                  color: colorScheme.onPrimaryContainer,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Total vendido',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  Text(
-                                    'Pastelitos del grupo',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                              const Spacer(),
-                              Text(
-                                _docenaLabel(totalDoc),
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: colorScheme.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-                          const Divider(height: 1),
-                          const SizedBox(height: 16),
-
-                          // Barra de progreso entregados
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          '📦 Entregadas',
-                                          style:
-                                              Theme.of(
-                                                context,
-                                              ).textTheme.bodySmall,
-                                        ),
-                                        Text(
-                                          _docenaLabel(delivered),
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.green,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: LinearProgressIndicator(
-                                        value:
-                                            totalDoc > 0
-                                                ? (delivered / totalDoc)
-                                                    .clamp(0.0, 1.0)
-                                                    .toDouble()
-                                                : 0,
-                                        minHeight: 8,
-                                        backgroundColor: Colors.grey.shade200,
-                                        valueColor:
-                                            const AlwaysStoppedAnimation(
-                                              Colors.green,
-                                            ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          '⌛ Pendientes',
-                                          style:
-                                              Theme.of(
-                                                context,
-                                              ).textTheme.bodySmall,
-                                        ),
-                                        Text(
-                                          _docenaLabel(pending),
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: colorScheme.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                  _buildProgressCard(
+                    context,
+                    icon: Icons.auto_stories,
+                    title: 'Total vendido',
+                    subtitle: 'Pastelitos del grupo',
+                    total: totalDoc,
+                    delivered: delivered,
+                    color: colorScheme.primary,
                   ),
 
                   const SizedBox(height: 16),
@@ -335,13 +343,14 @@ class _TotalsPageState extends State<TotalsPage> {
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    _buildMetricCard(
+                    _buildProgressCard(
                       context,
-                      'Churros',
-                      'Total vendido',
-                      _docenaLabel(totalChurros),
-                      Icons.bakery_dining_outlined,
-                      Colors.brown.shade500,
+                      icon: Icons.bakery_dining_outlined,
+                      title: 'Total vendido',
+                      subtitle: 'Churros del grupo',
+                      total: totalChurros,
+                      delivered: churrosDelivered,
+                      color: Colors.brown.shade500,
                     ),
                   ],
 
