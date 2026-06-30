@@ -1,16 +1,15 @@
 // main.dart
 import 'package:eventosspa/firebase_options.dart';
+import 'package:eventosspa/orders.dart';
 import 'package:eventosspa/orders_list.dart';
 import 'package:eventosspa/payment_success_page.dart';
 import 'package:eventosspa/purchase_page.dart';
-import 'package:eventosspa/qr_scanner_page.dart';
 import 'package:eventosspa/tesoreria_page.dart';
 import 'package:eventosspa/totals_page.dart';
 import 'package:eventosspa/firestore_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:quarks_version_checker/quarks_version_checker.dart';
@@ -35,19 +34,37 @@ class EventosSPA extends StatelessWidget {
     return MaterialApp(
       title: 'San Pablo Apóstol',
       theme: _buildTheme(),
-      initialRoute: '/',
+      initialRoute: '/ventas',
       onGenerateRoute: (settings) {
         // Parseamos la URL entrante, incluyendo sus parámetros
-        final uri = Uri.parse(settings.name ?? '/');
+        final uri = Uri.parse(settings.name ?? '/ventas');
 
         // Evaluamos solo el "path" (ej: /pago-ok) e ignoramos lo que viene después del "?"
         switch (uri.path) {
-          case '/':
+          // ── Pública: pantalla de venta (compra de pastelitos) ──────────
+          case '/ventas':
             return MaterialPageRoute(
-              builder: (_) => const HomePage(),
-              settings:
-                  settings, // Pasamos los settings para no perder la URL original
+              builder: (_) => const PurchasePage(),
+              settings: settings,
             );
+
+          // ── Internas: uso del grupo scout ───────────────────────────────
+          case '/pedidos':
+            return MaterialPageRoute(
+              builder: (_) => const HomePage(initialTab: HomeTab.pedidos),
+              settings: settings,
+            );
+          case '/estadisticas':
+            return MaterialPageRoute(
+              builder: (_) => const HomePage(initialTab: HomeTab.estadisticas),
+              settings: settings,
+            );
+          case '/lista':
+            return MaterialPageRoute(
+              builder: (_) => const HomePage(initialTab: HomeTab.lista),
+              settings: settings,
+            );
+
           case '/tesoreria':
             return MaterialPageRoute(
               builder: (_) => const TesoreriaPage(),
@@ -60,10 +77,12 @@ class EventosSPA extends StatelessWidget {
               builder: (_) => const PaymentSuccessPage(),
               settings: settings,
             );
+
+          // ── Cualquier otra cosa (incluida "/") → venta pública ──────────
           default:
             return MaterialPageRoute(
-              builder: (_) => const HomePage(),
-              settings: settings,
+              builder: (_) => const PurchasePage(),
+              settings: const RouteSettings(name: '/ventas'),
             );
         }
       },
@@ -241,234 +260,299 @@ class EventosSPA extends StatelessWidget {
   }
 }
 
+enum HomeTab { pedidos, estadisticas, lista }
+
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final HomeTab initialTab;
+  const HomePage({super.key, this.initialTab = HomeTab.estadisticas});
   @override
   HomePageState createState() => HomePageState();
 }
 
 class HomePageState extends State<HomePage> {
-  int _currentIndex = 0;
-  bool _authenticated = false;
+  late int _currentIndex;
   final TextEditingController _passwordController = TextEditingController();
-  late String _listPassword;
-  bool _loadingPassword = true;
-  bool _readerAuthenticated = false;
+  final FocusNode _passwordFocus = FocusNode();
+  String _managementPass = '';
+  bool _loadingConfig = true;
+  String? _error;
+
+  // 🔧 Acceso único para toda la sección interna (Pedidos/Estadísticas/Lista).
+  // Se valida una vez por sesión contra ManagementAuth.granted (en memoria).
+  bool get _granted => ManagementAuth.granted;
 
   @override
   void initState() {
     super.initState();
-    _loadListPassword();
+    _currentIndex = widget.initialTab.index;
+    _loadConfig();
   }
 
   @override
   void dispose() {
     _passwordController.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
-  Future<void> _loadListPassword() async {
-    final doc =
-        await FirebaseFirestore.instance
-            .collection('PASTELITOS')
-            .doc('Config')
-            .get();
+  Future<void> _loadConfig() async {
+    final config = await ConfigCache.getConfig();
+    if (!mounted) return;
     setState(() {
-      _listPassword = (doc.data()?['listPassword'] as String?) ?? '';
-      _loadingPassword = false;
+      _managementPass = (config['managementPass'] as String?) ?? '';
+      _loadingConfig = false;
     });
   }
 
-  Future<void> _showAuthDialog() async {
-    if (_loadingPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cargando configuración...')),
-      );
-      return;
-    }
-    await showDialog<void>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(
-                  Icons.lock_outline,
-                  color: Theme.of(ctx).colorScheme.primary,
-                  size: 22,
-                ),
-                const SizedBox(width: 8),
-                const Text('Acceso restringido'),
-              ],
-            ),
-            content: TextField(
-              controller: _passwordController,
-              obscureText: true,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Contraseña',
-                prefixIcon: Icon(Icons.key_outlined),
-              ),
-              onSubmitted: (_) => _checkPassword(ctx),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  _passwordController.clear();
-                  Navigator.pop(ctx);
-                },
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => _checkPassword(ctx),
-                child: const Text('Entrar'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  void _checkPassword(BuildContext ctx) {
+  void _checkPassword() {
     final entered = _passwordController.text;
-    if (entered == _listPassword) {
+    if (_managementPass.isNotEmpty && entered == _managementPass) {
       setState(() {
-        _authenticated = true;
-        _readerAuthenticated = true;
-        _currentIndex = 2;
+        ManagementAuth.granted = true;
+        _error = null;
       });
-      Navigator.pop(ctx);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('✅ Acceso administrador')));
-    } else if (entered == _listPassword /* readerPass */ ) {
-      // Acá cargá el readerPass de Firestore igual que listPassword
-      setState(() {
-        _readerAuthenticated = true;
-        _currentIndex = 2;
-      });
-      Navigator.pop(ctx);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('✅ Acceso lector')));
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('❌ Contraseña incorrecta')));
+      setState(() => _error = 'Contraseña incorrecta');
     }
     _passwordController.clear();
   }
 
-  Future<void> _confirmReset() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            icon: const Icon(
-              Icons.warning_amber_rounded,
-              color: Colors.red,
-              size: 40,
-            ),
-            title: const Text('Reiniciar pedidos'),
-            content: const Text(
-              '¿Seguro? Se eliminarán todos los pedidos y se reiniciarán los totales. Esta acción no se puede deshacer.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Reiniciar'),
-              ),
-            ],
-          ),
-    );
-    if (ok == true) {
-      await FirestoreService.resetAllOrders();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🔄 Pedidos y totales reiniciados')),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      const PurchasePage(), // tab 0 - público
-      const TotalsPage(), // tab 1 - público
-      OrdersListPage(
-        isAdmin: _authenticated,
-        isReader: _readerAuthenticated,
-      ), // tab 2 - requiere auth
-    ];
-
+  // ── Pantalla de acceso (no es un dialog dismissible: o entrás, o volvés
+  //     a /ventas) ──────────────────────────────────────────────────────
+  Widget _buildAccessScreen() {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 76,
         titleSpacing: 20,
         title: Image.asset('assets/spa.png', height: 58, fit: BoxFit.contain),
-        actions: [
-          if (_currentIndex == 2 && _authenticated)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: IconButton(
-                icon: const Icon(Icons.delete_sweep_outlined),
-                tooltip: 'Reiniciar pedidos',
-                onPressed: _confirmReset,
-              ),
-            ),
-          if (_currentIndex == 2 && _readerAuthenticated)
-            IconButton(
-              icon: const Icon(Icons.qr_code_scanner),
-              tooltip: 'Escanear talonario',
-              onPressed:
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const QrScannerPage()),
-                  ),
-            ),
-        ],
       ),
-      body: pages[_currentIndex],
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          NavigationBar(
-            selectedIndex: _currentIndex,
-            onDestinationSelected: (i) {
-              if (i == 2 && !_readerAuthenticated && !_authenticated) {
-                _showAuthDialog();
-              } else {
-                setState(() => _currentIndex = i);
-              }
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.shopping_cart_outlined),
-                selectedIcon: Icon(Icons.shopping_cart),
-                label: 'Comprar',
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child:
+                    _loadingConfig
+                        ? const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                        : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.lock_outline,
+                              size: 40,
+                              color: cs.primary,
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Acceso restringido',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Esta sección es de uso interno del grupo scout.',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: Colors.grey.shade600),
+                            ),
+                            const SizedBox(height: 20),
+                            TextField(
+                              controller: _passwordController,
+                              focusNode: _passwordFocus,
+                              obscureText: true,
+                              autofocus: true,
+                              decoration: InputDecoration(
+                                labelText: 'Contraseña',
+                                prefixIcon: const Icon(Icons.key_outlined),
+                                errorText: _error,
+                              ),
+                              onSubmitted: (_) => _checkPassword(),
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed:
+                                        () => Navigator.of(
+                                          context,
+                                        ).pushReplacementNamed('/ventas'),
+                                    child: const Text('Volver a Ventas'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: _checkPassword,
+                                    child: const Text('Entrar'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
               ),
-              NavigationDestination(
-                icon: Icon(Icons.bar_chart_outlined),
-                selectedIcon: Icon(Icons.bar_chart),
-                label: 'Totales',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _onDestinationSelected(int i) {
+    Navigator.of(context).maybePop(); // cierra el drawer si está abierto
+    setState(() => _currentIndex = i);
+  }
+
+  String _tabTitle(int i) {
+    switch (i) {
+      case 0:
+        return 'Pedidos';
+      case 1:
+        return 'Estadísticas';
+      case 2:
+        return 'Lista de pedidos';
+      default:
+        return 'San Pablo Apóstol';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_granted) return _buildAccessScreen();
+
+    return Scaffold(
+      appBar: AppBar(
+        toolbarHeight: 76,
+        titleSpacing: 20,
+        title: Text(_tabTitle(_currentIndex)),
+      ),
+      // 🔧 Drawer en vez de NavigationBar fija: el menú no ocupa espacio en
+      // pantalla cuando está cerrado (antes AppBar + NavigationBar +
+      // footer se comían una franja fija arriba Y abajo en todo momento).
+      drawer: Drawer(
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                child: Image.asset(
+                  'assets/spa.png',
+                  height: 64,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.centerLeft,
+                ),
               ),
-              NavigationDestination(
-                icon: Icon(Icons.list_alt_outlined),
-                selectedIcon: Icon(Icons.list_alt),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              _DrawerItem(
+                icon: Icons.add_box_outlined,
+                selectedIcon: Icons.add_box,
+                label: 'Pedidos',
+                selected: _currentIndex == 0,
+                onTap: () => _onDestinationSelected(0),
+              ),
+              _DrawerItem(
+                icon: Icons.bar_chart_outlined,
+                selectedIcon: Icons.bar_chart,
+                label: 'Estadísticas',
+                selected: _currentIndex == 1,
+                onTap: () => _onDestinationSelected(1),
+              ),
+              _DrawerItem(
+                icon: Icons.list_alt_outlined,
+                selectedIcon: Icons.list_alt,
                 label: 'Lista',
+                selected: _currentIndex == 2,
+                onTap: () => _onDestinationSelected(2),
+              ),
+              const Spacer(),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.storefront_outlined, size: 20),
+                  title: const Text('Ir a Ventas'),
+                  onTap:
+                      () =>
+                          Navigator.of(context).pushReplacementNamed('/ventas'),
+                ),
               ),
             ],
           ),
-          const QuarksFooter(
-            backgroundColor: Colors.white,
-            textColor: Colors.black,
-          ),
+        ),
+      ),
+      // 🔧 IndexedStack: las 3 páginas se crean UNA sola vez y se mantienen
+      // vivas en memoria. Antes, al cambiar de tab, `pages` se recreaba
+      // enterito en cada build() de HomePage → nuevos widgets → nuevas
+      // suscripciones a Firestore en cada cambio de tab.
+      body: IndexedStack(
+        index: _currentIndex,
+        children: const [
+          OrderPage(), // tab 0 - carga manual de pedidos, interno
+          TotalsPage(), // tab 1 - estadísticas
+          OrdersListPage(), // tab 2 - lista; reader por defecto, admin via botón
         ],
+      ),
+      bottomNavigationBar: const QuarksFooter(
+        backgroundColor: Colors.white,
+        textColor: Colors.black,
+      ),
+    );
+  }
+}
+
+class _DrawerItem extends StatelessWidget {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DrawerItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: selected ? cs.primaryContainer : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: ListTile(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          leading: Icon(
+            selected ? selectedIcon : icon,
+            color: selected ? cs.primary : Colors.grey.shade600,
+          ),
+          title: Text(
+            label,
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? cs.primary : Colors.grey.shade800,
+            ),
+          ),
+          onTap: onTap,
+        ),
       ),
     );
   }

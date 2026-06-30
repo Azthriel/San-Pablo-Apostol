@@ -231,6 +231,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage> {
   String? _collectionStatus;
   Uint8List? _bgImage;
   bool _generatingPdf = false;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _pendingStream;
 
   @override
   void initState() {
@@ -240,6 +241,15 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage> {
     _collectionStatus =
         uri.queryParameters['collection_status'] ??
         uri.queryParameters['status'];
+    if (_externalRef != null) {
+      _pendingStream =
+          FirebaseFirestore.instance
+              .collection('PASTELITOS')
+              .doc('PendingPayments')
+              .collection('items')
+              .doc(_externalRef)
+              .snapshots();
+    }
     _loadBg();
   }
 
@@ -443,13 +453,7 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage> {
 
     return _ScaffoldWrapper(
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream:
-            FirebaseFirestore.instance
-                .collection('PASTELITOS')
-                .doc('PendingPayments')
-                .collection('items')
-                .doc(_externalRef)
-                .snapshots(),
+        stream: _pendingStream,
         builder: (context, snap) {
           if (snap.hasError) {
             return Center(child: Text('Error: ${snap.error}'));

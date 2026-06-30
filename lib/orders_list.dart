@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:js_interop';
 import 'package:eventosspa/firestore_service.dart';
 import 'package:eventosspa/orders.dart';
+import 'package:eventosspa/qr_scanner_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -16,19 +17,18 @@ num _safeNum(dynamic v) =>
     v is num ? v : num.tryParse(v?.toString() ?? '') ?? 0;
 
 class OrdersListPage extends StatefulWidget {
-  final bool isAdmin;
-  final bool isReader;
-  const OrdersListPage({
-    super.key,
-    this.isAdmin = false,
-    this.isReader = false,
-  });
+  const OrdersListPage({super.key});
   @override
   _OrdersListPageState createState() => _OrdersListPageState();
 }
 
 class _OrdersListPageState extends State<OrdersListPage> {
   bool showFilters = false;
+
+  // 🔧 La pantalla siempre se ve en modo reader. isAdmin se eleva en runtime
+  // ingresando adminPass en el botón "Admin" del header.
+  bool get _isAdmin => AdminAuth.granted;
+  final _adminPasswordController = TextEditingController();
 
   // Docs filtrados actualmente — se actualiza en cada rebuild del StreamBuilder
   // para que el botón de exportar siempre exporte lo que se está viendo.
@@ -72,10 +72,127 @@ class _OrdersListPageState extends State<OrdersListPage> {
     'Docena mixta vegano',
   ];
 
+  // 🔧 Stream creado UNA sola vez (lazy, vía late final) en vez de en cada
+  // build(). Antes cada setState() de un filtro recreaba la suscripción y
+  // disparaba una lectura completa de la colección.
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream =
+      FirebaseFirestore.instance
+          .collection('PASTELITOS')
+          .doc('Ordenes')
+          .collection('items')
+          .orderBy('createdAt', descending: false)
+          .limit(1000) // 🔧 tope de seguridad — ajustar si el volumen crece
+          .snapshots();
+
   @override
   void dispose() {
     _sellerFilterController.dispose();
+    _adminPasswordController.dispose();
     super.dispose();
+  }
+
+  // ── Elevar a admin: pide adminPass por dialog ───────────────────────────
+  Future<void> _showAdminDialog() async {
+    final config = await ConfigCache.getConfig();
+    final adminPass = (config['adminPass'] as String?) ?? '';
+    if (!mounted) return;
+
+    String? error;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            void check() {
+              if (adminPass.isNotEmpty &&
+                  _adminPasswordController.text == adminPass) {
+                AdminAuth.granted = true;
+                _adminPasswordController.clear();
+                Navigator.pop(ctx);
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('✅ Acceso admin habilitado')),
+                );
+              } else {
+                _adminPasswordController.clear();
+                setDialogState(() => error = 'Contraseña incorrecta');
+              }
+            }
+
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.admin_panel_settings_outlined,
+                    color: Theme.of(ctx).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Acceso admin'),
+                ],
+              ),
+              content: TextField(
+                controller: _adminPasswordController,
+                obscureText: true,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Contraseña de admin',
+                  prefixIcon: const Icon(Icons.key_outlined),
+                  errorText: error,
+                ),
+                onSubmitted: (_) => check(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    _adminPasswordController.clear();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(onPressed: check, child: const Text('Entrar')),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmReset() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            icon: const Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.red,
+              size: 40,
+            ),
+            title: const Text('Reiniciar pedidos'),
+            content: const Text(
+              '¿Seguro? Se eliminarán todos los pedidos y se reiniciarán los totales. Esta acción no se puede deshacer.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Reiniciar'),
+              ),
+            ],
+          ),
+    );
+    if (ok == true) {
+      await FirestoreService.resetAllOrders();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🔄 Pedidos y totales reiniciados')),
+        );
+      }
+    }
   }
 
   // ── Exportar pedidos filtrados a .xlsx ──────────────────────────────────────
@@ -196,14 +313,7 @@ class _OrdersListPageState extends State<OrdersListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canAdd = widget.isAdmin || widget.isReader;
-    final baseStream =
-        FirebaseFirestore.instance
-            .collection('PASTELITOS')
-            .doc('Ordenes')
-            .collection('items')
-            .orderBy('createdAt', descending: false)
-            .snapshots();
+    final baseStream = _ordersStream;
 
     return Stack(
       children: [
@@ -212,24 +322,48 @@ class _OrdersListPageState extends State<OrdersListPage> {
             // Botón filtros
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Row(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text(
-                    'Lista de pedidos',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  // Exportar a Excel — disponible siempre (reader incluido)
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.table_chart_outlined, size: 20),
+                    tooltip: 'Exportar a Excel (.xlsx)',
+                    onPressed: _exportToExcel,
                   ),
-                  const Spacer(),
-                  // Exportar a Excel
-                  if (widget.isAdmin || widget.isReader) ...[
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.qr_code_scanner, size: 20),
+                    tooltip: 'Escanear talonario',
+                    onPressed:
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const QrScannerPage(),
+                          ),
+                        ),
+                  ),
+                  // Acciones de admin
+                  if (_isAdmin)
                     IconButton.filledTonal(
-                      icon: const Icon(Icons.table_chart_outlined, size: 20),
-                      tooltip: 'Exportar a Excel (.xlsx)',
-                      onPressed: _exportToExcel,
+                      icon: const Icon(
+                        Icons.delete_sweep_outlined,
+                        size: 20,
+                        color: Colors.red,
+                      ),
+                      tooltip: 'Reiniciar pedidos',
+                      onPressed: _confirmReset,
+                    )
+                  else
+                    IconButton.outlined(
+                      icon: const Icon(
+                        Icons.admin_panel_settings_outlined,
+                        size: 20,
+                      ),
+                      tooltip: 'Acceso admin',
+                      onPressed: _showAdminDialog,
                     ),
-                    const SizedBox(width: 8),
-                  ],
                   FilledButton.tonalIcon(
                     icon: Icon(
                       showFilters ? Icons.filter_alt_off : Icons.filter_alt,
@@ -468,12 +602,17 @@ class _OrdersListPageState extends State<OrdersListPage> {
                         return true;
                       }).toList();
 
-                  // Mantener referencia a los docs filtrados para el botón de exportar
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      setState(() => _currentFilteredDocs = filteredDocs);
-                    }
-                  });
+                  // 🔧 FIX CRÍTICO: antes esto hacía setState() en un
+                  // addPostFrameCallback en CADA build → disparaba un
+                  // rebuild → que volvía a entrar acá → que volvía a hacer
+                  // setState()... un loop infinito de rebuilds corriendo
+                  // todo el tiempo en segundo plano (y, como esta página
+                  // ahora queda siempre montada por el IndexedStack, ni
+                  // siquiera se detenía al cambiar de tab). Esta variable
+                  // solo la lee el botón "Exportar" cuando lo tocás, no
+                  // necesita reconstruir la UI — una asignación simple
+                  // alcanza.
+                  _currentFilteredDocs = filteredDocs;
 
                   if (filteredDocs.isEmpty) {
                     return Center(
@@ -517,21 +656,52 @@ class _OrdersListPageState extends State<OrdersListPage> {
                           builder: (context, constraints) {
                             // En pantallas anchas mostramos 2 columnas
                             if (constraints.maxWidth > 700) {
-                              return GridView.builder(
+                              // 🔧 Antes esto era un GridView con
+                              // childAspectRatio fijo (0.72): todas las
+                              // cards de una fila quedaban con la altura
+                              // de la más alta, dejando cards cortas con
+                              // un montón de espacio vacío. Y como Wrap +
+                              // SingleChildScrollView construye TODAS las
+                              // cards de una sin lazy loading, con listas
+                              // largas eso por sí solo puede tildar. Esto
+                              // usa ListView.builder (lazy: solo construye
+                              // lo visible) con filas de 2 cards, cada fila
+                              // mide su propio contenido en vez de un
+                              // aspect ratio fijo global.
+                              return ListView.builder(
                                 padding: const EdgeInsets.all(16),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                      childAspectRatio: 0.72,
+                                itemCount: (filteredDocs.length / 2).ceil(),
+                                itemBuilder: (_, rowIndex) {
+                                  final i1 = rowIndex * 2;
+                                  final i2 = i1 + 1;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: IntrinsicHeight(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: _buildOrderCard(
+                                              context,
+                                              filteredDocs[i1],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child:
+                                                i2 < filteredDocs.length
+                                                    ? _buildOrderCard(
+                                                      context,
+                                                      filteredDocs[i2],
+                                                    )
+                                                    : const SizedBox(),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                itemCount: filteredDocs.length,
-                                itemBuilder:
-                                    (_, i) => _buildOrderCard(
-                                      context,
-                                      filteredDocs[i],
-                                    ),
+                                  );
+                                },
                               );
                             }
                             return ListView.separated(
@@ -554,7 +724,7 @@ class _OrdersListPageState extends State<OrdersListPage> {
           ],
         ),
 
-        if (canAdd)
+        if (_isAdmin)
           Positioned(
             bottom: 16,
             right: 16,
@@ -909,6 +1079,68 @@ class _OrdersListPageState extends State<OrdersListPage> {
                           }
                         },
                       ),
+
+                      // Eliminar (admin) — borra el documento, distinto de cancelar
+                      if (_isAdmin)
+                        OutlinedButton.icon(
+                          icon: const Icon(
+                            Icons.delete_forever_outlined,
+                            size: 16,
+                            color: Colors.red,
+                          ),
+                          label: const Text('Eliminar'),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            backgroundColor: Colors.red.withValues(alpha: 0.04),
+                          ),
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder:
+                                  (ctx) => AlertDialog(
+                                    icon: const Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Colors.red,
+                                      size: 40,
+                                    ),
+                                    title: const Text('Eliminar pedido'),
+                                    content: Text(
+                                      '¿Eliminar definitivamente el pedido de '
+                                      '${o['buyerName']}? Esta acción no se '
+                                      'puede deshacer (a diferencia de '
+                                      'cancelar, el pedido deja de existir).',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed:
+                                            () => Navigator.pop(ctx, false),
+                                        child: const Text('No'),
+                                      ),
+                                      FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                        ),
+                                        onPressed:
+                                            () => Navigator.pop(ctx, true),
+                                        child: const Text('Eliminar'),
+                                      ),
+                                    ],
+                                  ),
+                            );
+                            if (ok == true) {
+                              await FirestoreService.deleteOrder(doc.id);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🗑️ Pedido eliminado'),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ),
                     ],
                   ),
                 ] else if (canceledAt != null) ...[

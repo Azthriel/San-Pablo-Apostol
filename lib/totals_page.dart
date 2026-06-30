@@ -2,8 +2,20 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class TotalsPage extends StatelessWidget {
+class TotalsPage extends StatefulWidget {
   const TotalsPage({super.key});
+
+  @override
+  State<TotalsPage> createState() => _TotalsPageState();
+}
+
+class _TotalsPageState extends State<TotalsPage> {
+  // 🔧 Stream creado una sola vez (antes se creaba en cada build())
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _totalsStream =
+      FirebaseFirestore.instance
+          .collection('PASTELITOS')
+          .doc('Totales')
+          .snapshots();
 
   String _docenaLabel(num val) {
     final d = val.toDouble();
@@ -33,7 +45,7 @@ class TotalsPage extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha:0.12),
+                    color: color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, size: 20, color: color),
@@ -86,11 +98,7 @@ class TotalsPage extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
           child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream:
-                FirebaseFirestore.instance
-                    .collection('PASTELITOS')
-                    .doc('Totales')
-                    .snapshots(),
+            stream: _totalsStream,
             builder: (context, snap) {
               if (snap.hasError) {
                 return const Center(child: Text('Error cargando totales'));

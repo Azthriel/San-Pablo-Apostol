@@ -2,7 +2,6 @@
 // ignore_for_file: unused_field
 
 import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:eventosspa/firestore_service.dart';
 import 'package:eventosspa/master.dart';
 import 'package:eventosspa/payment_success_page.dart';
@@ -90,12 +89,7 @@ class PurchasePageState extends State<PurchasePage> {
 
   Future<void> _loadPrices() async {
     try {
-      final doc =
-          await FirebaseFirestore.instance
-              .collection('PASTELITOS')
-              .doc('Config')
-              .get();
-      final d = doc.data() ?? {};
+      final d = await ConfigCache.getConfig();
       setState(() {
         _docPastelitos = (d['docPastelitos'] as num? ?? 10000).toDouble();
         _mdocPastelitos = (d['mdocPastelitos'] as num? ?? 6000).toDouble();
