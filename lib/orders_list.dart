@@ -40,6 +40,7 @@ class _OrdersListPageState extends State<OrdersListPage> {
   String paymentMethodFilter = 'Todos';
   String deliveryFilter = 'Todos';
   String combinedFilter = 'Todos';
+  String churrosFilter = 'Todos';
 
   final _sellerFilterController = TextEditingController();
 
@@ -58,6 +59,12 @@ class _OrdersListPageState extends State<OrdersListPage> {
     'Transferencia',
   ];
   final List<String> deliveryOptions = ['Todos', 'Entregados', 'Pendientes'];
+  final List<String> churrosOptions = [
+    'Todos',
+    'Con churros',
+    'Sin churros',
+    'Solo churros',
+  ];
   final List<String> combinedOptions = [
     'Todos',
     'Docena batata',
@@ -519,6 +526,29 @@ class _OrdersListPageState extends State<OrdersListPage> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      _buildFilterRow(
+                        children: [
+                          _FilterField(
+                            label: 'Churros',
+                            child: DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(isDense: true),
+                              initialValue: churrosFilter,
+                              items:
+                                  churrosOptions
+                                      .map(
+                                        (c) => DropdownMenuItem(
+                                          value: c,
+                                          child: Text(c),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (v) => setState(() => churrosFilter = v!),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -565,6 +595,22 @@ class _OrdersListPageState extends State<OrdersListPage> {
                         }
                         if (deliveryFilter == 'Pendientes' && delivered) {
                           return false;
+                        }
+                        if (churrosFilter != 'Todos') {
+                          final churrosQty = _safeNum(o['churros']);
+                          final docenasQty = _safeNum(o['docenas']);
+                          final hasChurros = churrosQty > 0;
+                          if (churrosFilter == 'Con churros' && !hasChurros) {
+                            return false;
+                          }
+                          if (churrosFilter == 'Sin churros' && hasChurros) {
+                            return false;
+                          }
+                          // Pedidos que son SOLO churros (sin pastelitos)
+                          if (churrosFilter == 'Solo churros' &&
+                              !(hasChurros && docenasQty <= 0)) {
+                            return false;
+                          }
                         }
                         if (combinedFilter != 'Todos') {
                           final docFlavors =
@@ -840,60 +886,98 @@ class _OrdersListPageState extends State<OrdersListPage> {
                               : Icons.account_balance_outlined,
                       label: paymentMethod,
                     ),
-                    if (churros > 0)
-                      _InfoChip(
-                        icon: Icons.bakery_dining_outlined,
-                        label: 'Churros: ${_docenaLabel(churros)}',
-                        color: Colors.brown.shade400,
-                      ),
                   ],
                 ),
 
                 const SizedBox(height: 12),
 
-                // Sabores
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.cake_outlined,
-                            size: 14,
-                            color: Colors.grey.shade500,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Sabores',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w600,
+                // Sabores (solo si hay pastelitos en el pedido)
+                if (flavors.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.cake_outlined,
+                              size: 14,
+                              color: Colors.grey.shade500,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Sabores',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ...flavors.map(
+                          (f) => Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              '• ${f['flavor']} (${f['size']}, ${f['type']})',
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ...flavors.map(
-                        (f) => Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
-                          child: Text(
-                            '• ${f['flavor']} (${f['size']}, ${f['type']})',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ],
+
+                // Churros — misma card que Sabores (solo si hay churros)
+                if (churros > 0) ...[
+                  if (flavors.isNotEmpty) const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.brown.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.brown.shade100),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.bakery_dining_outlined,
+                              size: 14,
+                              color: Colors.brown.shade400,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Churros',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: Colors.brown.shade400,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '• ${_docenaLabel(churros)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 if (!canceled) ...[
                   const SizedBox(height: 12),
@@ -1221,12 +1305,11 @@ class _FilterField extends StatelessWidget {
 class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color? color;
-  const _InfoChip({required this.icon, required this.label, this.color});
+  const _InfoChip({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Theme.of(context).colorScheme.primary;
+    final c = Theme.of(context).colorScheme.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(

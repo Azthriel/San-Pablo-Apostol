@@ -39,6 +39,9 @@ class OrderPageState extends State<OrderPage> {
       _flavors.fold<int>(0, (sum, f) => sum + (f.size == 'Docena' ? 12 : 6));
   int get remainingPieces => totalPieces - selectedPieces;
 
+  // El pedido debe tener al menos pastelitos o churros (no puede estar vacío)
+  bool get _hasItems => docenas > 0 || (churros ?? 0) > 0;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +81,7 @@ class OrderPageState extends State<OrderPage> {
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
     if (selectedPieces != totalPieces) return;
+    if (!_hasItems) return;
 
     final order = {
       'buyerName': _buyerController.text.trim(),
@@ -238,7 +242,7 @@ class OrderPageState extends State<OrderPage> {
 
                 // ── Pastelitos ────────────────────────────────
                 _SectionCard(
-                  title: 'Pastelitos',
+                  title: 'Pastelitos (opcional)',
                   icon: Icons.cake_outlined,
                   children: [
                     DropdownButtonFormField<double>(
@@ -247,200 +251,242 @@ class OrderPageState extends State<OrderPage> {
                         prefixIcon: Icon(Icons.confirmation_number_outlined),
                       ),
                       initialValue: docenas,
-                      items: List.generate(10, (i) {
-                        final val = (i + 1) * 0.5;
-                        return DropdownMenuItem(
-                          value: val,
-                          child: Text(_docenaLabel(val)),
-                        );
-                      }),
+                      items: [
+                        const DropdownMenuItem(
+                          value: 0.0,
+                          child: Text('Sin pastelitos'),
+                        ),
+                        ...List.generate(10, (i) {
+                          final val = (i + 1) * 0.5;
+                          return DropdownMenuItem(
+                            value: val,
+                            child: Text(_docenaLabel(val)),
+                          );
+                        }),
+                      ],
                       onChanged: (v) {
                         if (v == null) return;
                         setState(() {
                           docenas = v;
-                          _flavors = [
-                            FlavorSelection(
-                              size: v * 12 >= 12 ? 'Docena' : 'Media docena',
-                            ),
-                          ];
+                          _flavors =
+                              v == 0
+                                  ? []
+                                  : [
+                                    FlavorSelection(
+                                      size:
+                                          v * 12 >= 12
+                                              ? 'Docena'
+                                              : 'Media docena',
+                                    ),
+                                  ];
                         });
                       },
                     ),
                     const SizedBox(height: 20),
 
-                    // Contador de piezas
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Sabores — ${remainingPieces == 0 ? "¡Completo!" : "faltan $remainingPieces piezas"}',
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                    // Contador de piezas (solo si hay pastelitos)
+                    if (docenas > 0) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Sabores — ${remainingPieces == 0 ? "¡Completo!" : "faltan $remainingPieces piezas"}',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color:
-                                remainingPieces == 0
-                                    ? Colors.green.shade100
-                                    : colorScheme.primaryContainer.withValues(
-                                      alpha: 0.6,
-                                    ),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '$selectedPieces / $totalPieces',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
                               color:
                                   remainingPieces == 0
-                                      ? Colors.green.shade700
-                                      : colorScheme.primary,
+                                      ? Colors.green.shade100
+                                      : colorScheme.primaryContainer.withValues(
+                                        alpha: 0.6,
+                                      ),
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Sabores dinámicos
-                    ...List.generate(_flavors.length, (i) {
-                      final f = _flavors[i];
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: EdgeInsets.only(
-                              top: i > 0 ? 16 : 0,
-                              bottom: 8,
+                            child: Text(
+                              '$selectedPieces / $totalPieces',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    remainingPieces == 0
+                                        ? Colors.green.shade700
+                                        : colorScheme.primary,
+                              ),
                             ),
-                            child: Row(
-                              children: [
-                                if (i > 0)
-                                  const Expanded(child: Divider())
-                                else
-                                  const SizedBox.shrink(),
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    left: i > 0 ? 8 : 0,
-                                    right: 8,
-                                  ),
-                                  child: Text(
-                                    'Docena ${i + 1}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall?.copyWith(
-                                      color: Colors.grey.shade500,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                if (i > 0) const Expanded(child: Divider()),
-                              ],
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  initialValue: f.flavor,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Sabor',
-                                  ),
-                                  items:
-                                      flavorOptions
-                                          .map(
-                                            (g) => DropdownMenuItem(
-                                              value: g,
-                                              child: Text(g),
-                                            ),
-                                          )
-                                          .toList(),
-                                  onChanged:
-                                      (v) => setState(() => f.flavor = v!),
-                                ),
-                              ),
-                              if (_flavors.length > 1) ...[
-                                const SizedBox(width: 4),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.remove_circle_outline,
-                                    color: Colors.red,
-                                  ),
-                                  onPressed: () => _removeFlavor(i),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  initialValue: f.size,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Tamaño',
-                                  ),
-                                  items:
-                                      sizeOptions
-                                          .where(
-                                            (s) =>
-                                                s != 'Docena' ||
-                                                remainingPieces >= 12 ||
-                                                f.size == 'Docena',
-                                          )
-                                          .map(
-                                            (s) => DropdownMenuItem(
-                                              value: s,
-                                              child: Text(s),
-                                            ),
-                                          )
-                                          .toList(),
-                                  onChanged: (v) => setState(() => f.size = v!),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  initialValue: f.type,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Tipo',
-                                  ),
-                                  items:
-                                      typeOptions
-                                          .map(
-                                            (t) => DropdownMenuItem(
-                                              value: t,
-                                              child: Text(t),
-                                            ),
-                                          )
-                                          .toList(),
-                                  onChanged: (v) => setState(() => f.type = v!),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
-                      );
-                    }),
-
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.tonalIcon(
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Añadir docena'),
-                        onPressed: remainingPieces >= 6 ? _addFlavor : null,
                       ),
-                    ),
+                      const SizedBox(height: 12),
+
+                      // Sabores dinámicos
+                      ...List.generate(_flavors.length, (i) {
+                        final f = _flavors[i];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(
+                                top: i > 0 ? 16 : 0,
+                                bottom: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  if (i > 0)
+                                    const Expanded(child: Divider())
+                                  else
+                                    const SizedBox.shrink(),
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      left: i > 0 ? 8 : 0,
+                                      right: 8,
+                                    ),
+                                    child: Text(
+                                      'Docena ${i + 1}',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.copyWith(
+                                        color: Colors.grey.shade500,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  if (i > 0) const Expanded(child: Divider()),
+                                ],
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    initialValue: f.flavor,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Sabor',
+                                    ),
+                                    items:
+                                        flavorOptions
+                                            .map(
+                                              (g) => DropdownMenuItem(
+                                                value: g,
+                                                child: Text(g),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged:
+                                        (v) => setState(() => f.flavor = v!),
+                                  ),
+                                ),
+                                if (_flavors.length > 1) ...[
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () => _removeFlavor(i),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    initialValue: f.size,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Tamaño',
+                                    ),
+                                    items:
+                                        sizeOptions
+                                            .where(
+                                              (s) =>
+                                                  s != 'Docena' ||
+                                                  remainingPieces >= 12 ||
+                                                  f.size == 'Docena',
+                                            )
+                                            .map(
+                                              (s) => DropdownMenuItem(
+                                                value: s,
+                                                child: Text(s),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged:
+                                        (v) => setState(() => f.size = v!),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    initialValue: f.type,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Tipo',
+                                    ),
+                                    items:
+                                        typeOptions
+                                            .map(
+                                              (t) => DropdownMenuItem(
+                                                value: t,
+                                                child: Text(t),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged:
+                                        (v) => setState(() => f.type = v!),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      }),
+
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonalIcon(
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Añadir docena'),
+                          onPressed: remainingPieces >= 6 ? _addFlavor : null,
+                        ),
+                      ),
+                    ], // fin if (docenas > 0)
+                    if (docenas == 0)
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondaryContainer.withValues(
+                            alpha: 0.5,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color: colorScheme.secondary,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Sin pastelitos en este pedido.',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
 
@@ -512,11 +558,41 @@ class OrderPageState extends State<OrderPage> {
                 const SizedBox(height: 24),
 
                 // ── Botón enviar ─────────────────────────────
+                if (!_hasItems)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Colors.amber,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Elegí pastelitos y/o churros antes de continuar.',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 FilledButton.icon(
                   icon: const Icon(Icons.check_circle_outline),
                   label: const Text('Agregar pedido'),
                   onPressed:
-                      selectedPieces == totalPieces ? _handleSubmit : null,
+                      (selectedPieces == totalPieces && _hasItems)
+                          ? _handleSubmit
+                          : null,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     textStyle: const TextStyle(
