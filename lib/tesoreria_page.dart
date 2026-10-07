@@ -1,7 +1,6 @@
 // lib/tesoreria_page.dart
 import 'dart:js_interop';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:eventosspa/firestore_service.dart';
 import 'package:flutter/material.dart';
@@ -181,9 +180,8 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
 
   DateTime? _selectedPaymentDate;
   bool _creating = false;
-  bool _loadingConfig = true;
-  bool _authenticated = false;
-  String _configPassword = '';
+  bool _loadingConfig = false; // true mientras valida la clave en el server
+  bool get _authenticated => StaffAuth.isTesoreria;
 
   // Cache de imagen de fondo — se carga una sola vez
   Uint8List? _cachedBgImage;
@@ -211,7 +209,6 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
     _passwordController = TextEditingController();
     _selectedPaymentDate = DateTime.now();
     _paymentDateController.text = _formatDate(DateTime.now());
-    _fetchConfig();
   }
 
   @override
@@ -233,27 +230,20 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
   String _formatDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
-  Future<void> _fetchConfig() async {
+  Future<void> _checkPassword() async {
+    final pass = _passwordController.text.trim();
+    _passwordController.clear();
+    setState(() => _loadingConfig = true);
+    bool ok = false;
     try {
-      final doc =
-          await FirebaseFirestore.instance
-              .collection('TESORERIA')
-              .doc('Config')
-              .get();
-      _configPassword = (doc.data()?['pass'] as String?) ?? '';
+      ok = await StaffAuth.login(StaffRole.tesoreria, pass);
     } catch (_) {}
     if (!mounted) return;
     setState(() => _loadingConfig = false);
-  }
-
-  void _checkPassword() {
-    if (_passwordController.text.trim() == _configPassword) {
-      setState(() => _authenticated = true);
-    } else {
+    if (!ok) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('❌ Contraseña incorrecta')));
-      _passwordController.clear();
     }
   }
 
@@ -362,7 +352,9 @@ class _TesoreriaPageState extends State<TesoreriaPage> {
               if (mobileShare)
                 OutlinedButton.icon(
                   icon: const Icon(Icons.share_outlined),
-                  label: const Text('Compartir vía WhatsApp, Email... (Solo celular)'),
+                  label: const Text(
+                    'Compartir vía WhatsApp, Email... (Solo celular)',
+                  ),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: cs.primary),
                   ),

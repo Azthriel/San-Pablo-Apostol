@@ -1,22 +1,65 @@
 // firestore_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:eventosspa/master.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
-// ─── Auth de la sección interna (Pedidos/Estadísticas/Lista) ──────────────
-// Flag en memoria: se valida una vez por sesión de la pestaña. Si se recarga
-// la página vuelve a pedir clave (no se persiste en localStorage a propósito).
-class ManagementAuth {
-  ManagementAuth._();
-  static bool granted = false;
-}
+// ─── Auth de staff ─────────────────────────────────────────────────────────
+// La clave se valida en la Cloud Function `staff_login`, que le pone el rol
+// como custom claim al usuario anónimo. Las reglas de Firestore chequean ese
+// claim, así que ya no alcanza con "saber la clave" leyendo Config.
+// Persistencia SESSION: sobrevive a un F5, se pierde al cerrar la pestaña.
+// Los compradores nunca se loguean: la cuenta anónima se crea recién cuando
+// alguien ingresa una clave de staff.
+enum StaffRole { staff, admin, tesoreria }
 
-// ─── Auth de admin dentro de la pantalla Lista ─────────────────────────────
-// La pantalla Lista siempre se ve en modo "reader". Este flag habilita
-// acciones de admin (reiniciar pedidos, escanear QR) tras ingresar adminPass
-// en el botón correspondiente. También en memoria, 1 vez por sesión.
-class AdminAuth {
-  AdminAuth._();
-  static bool granted = false;
+class StaffAuth {
+  StaffAuth._();
+  static final _auth = FirebaseAuth.instance;
+  static Map<String, dynamic> _claims = {};
+
+  static bool has(StaffRole r) => _claims[r.name] == true;
+  static bool get isStaff => has(StaffRole.staff);
+  static bool get isAdmin => has(StaffRole.admin);
+  static bool get isTesoreria => has(StaffRole.tesoreria);
+
+  /// Llamar una vez en main(): si la pestaña ya tenía sesión, recupera roles.
+  static Future<void> restore() async {
+    try {
+      if (kIsWeb) await _auth.setPersistence(Persistence.SESSION);
+      final user = await _auth.authStateChanges().first;
+      if (user == null) return;
+      final token = await user.getIdTokenResult();
+      _claims = token.claims ?? {};
+    } catch (e) {
+      printLog('StaffAuth.restore: $e');
+    }
+  }
+
+  /// Devuelve true si la clave es correcta. Tira excepción si falla la red.
+  static Future<bool> login(StaffRole role, String password) async {
+    if (password.isEmpty) return false;
+    final user = _auth.currentUser ?? (await _auth.signInAnonymously()).user!;
+    try {
+      await FirebaseFunctions.instance.httpsCallable('staff_login').call({
+        'role': role.name,
+        'password': password,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'permission-denied') return false;
+      rethrow;
+    }
+    // Forzar refresh del token para que traiga el claim nuevo
+    final token = await user.getIdTokenResult(true);
+    _claims = token.claims ?? {};
+    return has(role);
+  }
+
+  static Future<void> logout() async {
+    await _auth.signOut();
+    _claims = {};
+  }
 }
 
 // Antes, HomePage, PurchasePage y TesoreriaPage pegaban a Firestore por

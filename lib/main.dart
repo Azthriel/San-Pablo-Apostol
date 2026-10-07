@@ -4,6 +4,9 @@ import 'package:eventosspa/orders.dart';
 import 'package:eventosspa/orders_list.dart';
 import 'package:eventosspa/payment_success_page.dart';
 import 'package:eventosspa/purchase_page.dart';
+import 'package:eventosspa/sanpaoke/sanpaoke_page.dart';
+import 'package:eventosspa/sanpaoke/sanpaoke_pago_page.dart';
+import 'package:eventosspa/sanpaoke/sanpaoke_puerta_page.dart';
 import 'package:eventosspa/tesoreria_page.dart';
 import 'package:eventosspa/totals_page.dart';
 import 'package:eventosspa/firestore_service.dart';
@@ -22,6 +25,7 @@ Future<void> main() async {
   } catch (_) {}
   usePathUrlStrategy();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await StaffAuth.restore();
   if (kIsWeb) SemanticsBinding.instance.ensureSemantics();
   runApp(const EventosSPA());
 }
@@ -70,6 +74,23 @@ class EventosSPA extends StatelessWidget {
               builder: (_) => const TesoreriaPage(),
               settings: settings,
             );
+          // ── Sanpaoke (karaoke) ──────────────────────────────────────────
+          case '/sanpaoke':
+            return MaterialPageRoute(
+              builder: (_) => const SanpaokePage(),
+              settings: settings,
+            );
+          case '/sanpaoke/pago':
+            return MaterialPageRoute(
+              builder: (_) => const SanpaokePagoPage(),
+              settings: settings,
+            );
+          case '/sanpaoke/puerta':
+            return MaterialPageRoute(
+              builder: (_) => const SanpaokePuertaPage(),
+              settings: settings,
+            );
+
           case '/pago-ok':
           case '/pago-fallido':
           case '/pago-pendiente':
@@ -273,19 +294,17 @@ class HomePageState extends State<HomePage> {
   late int _currentIndex;
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _passwordFocus = FocusNode();
-  String _managementPass = '';
-  bool _loadingConfig = true;
+  bool _loadingConfig = false; // true mientras valida la clave en el server
   String? _error;
 
   // 🔧 Acceso único para toda la sección interna (Pedidos/Estadísticas/Lista).
-  // Se valida una vez por sesión contra ManagementAuth.granted (en memoria).
-  bool get _granted => ManagementAuth.granted;
+  // El rol lo da la Cloud Function staff_login (custom claim), no el cliente.
+  bool get _granted => StaffAuth.isStaff;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab.index;
-    _loadConfig();
   }
 
   @override
@@ -295,26 +314,25 @@ class HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Future<void> _loadConfig() async {
-    final config = await ConfigCache.getConfig();
+  Future<void> _checkPassword() async {
+    final entered = _passwordController.text;
+    _passwordController.clear();
+    setState(() {
+      _loadingConfig = true;
+      _error = null;
+    });
+    String? error;
+    try {
+      final ok = await StaffAuth.login(StaffRole.staff, entered);
+      if (!ok) error = 'Contraseña incorrecta';
+    } catch (_) {
+      error = 'Error de conexión, probá de nuevo';
+    }
     if (!mounted) return;
     setState(() {
-      _managementPass = (config['managementPass'] as String?) ?? '';
       _loadingConfig = false;
+      _error = error;
     });
-  }
-
-  void _checkPassword() {
-    final entered = _passwordController.text;
-    if (_managementPass.isNotEmpty && entered == _managementPass) {
-      setState(() {
-        ManagementAuth.granted = true;
-        _error = null;
-      });
-    } else {
-      setState(() => _error = 'Contraseña incorrecta');
-    }
-    _passwordController.clear();
   }
 
   // ── Pantalla de acceso (no es un dialog dismissible: o entrás, o volvés
@@ -479,7 +497,19 @@ class HomePageState extends State<HomePage> {
               const Spacer(),
               const Divider(height: 1),
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.mic_external_on_outlined, size: 20),
+                  title: const Text('Puerta Sanpaoke'),
+                  onTap:
+                      () => Navigator.of(
+                        context,
+                      ).pushReplacementNamed('/sanpaoke/puerta'),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: ListTile(
                   dense: true,
                   leading: const Icon(Icons.storefront_outlined, size: 20),

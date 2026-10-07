@@ -26,8 +26,8 @@ class _OrdersListPageState extends State<OrdersListPage> {
   bool showFilters = false;
 
   // 🔧 La pantalla siempre se ve en modo reader. isAdmin se eleva en runtime
-  // ingresando adminPass en el botón "Admin" del header.
-  bool get _isAdmin => AdminAuth.granted;
+  // ingresando la clave de admin (validada en la Cloud Function staff_login).
+  bool get _isAdmin => StaffAuth.isAdmin;
   final _adminPasswordController = TextEditingController();
 
   // Docs filtrados actualmente — se actualiza en cada rebuild del StreamBuilder
@@ -100,29 +100,39 @@ class _OrdersListPageState extends State<OrdersListPage> {
 
   // ── Elevar a admin: pide adminPass por dialog ───────────────────────────
   Future<void> _showAdminDialog() async {
-    final config = await ConfigCache.getConfig();
-    final adminPass = (config['adminPass'] as String?) ?? '';
-    if (!mounted) return;
-
     String? error;
+    bool checking = false;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
-            void check() {
-              if (adminPass.isNotEmpty &&
-                  _adminPasswordController.text == adminPass) {
-                AdminAuth.granted = true;
-                _adminPasswordController.clear();
+            Future<void> check() async {
+              if (checking) return;
+              final pass = _adminPasswordController.text;
+              _adminPasswordController.clear();
+              setDialogState(() {
+                checking = true;
+                error = null;
+              });
+              bool ok = false;
+              try {
+                ok = await StaffAuth.login(StaffRole.admin, pass);
+              } catch (_) {}
+              if (!ctx.mounted) return;
+              if (ok) {
                 Navigator.pop(ctx);
                 setState(() {});
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('✅ Acceso admin habilitado')),
-                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('✅ Acceso admin habilitado')),
+                  );
+                }
               } else {
-                _adminPasswordController.clear();
-                setDialogState(() => error = 'Contraseña incorrecta');
+                setDialogState(() {
+                  checking = false;
+                  error = 'Contraseña incorrecta';
+                });
               }
             }
 
@@ -156,7 +166,17 @@ class _OrdersListPageState extends State<OrdersListPage> {
                   },
                   child: const Text('Cancelar'),
                 ),
-                FilledButton(onPressed: check, child: const Text('Entrar')),
+                FilledButton(
+                  onPressed: checking ? null : check,
+                  child:
+                      checking
+                          ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Text('Entrar'),
+                ),
               ],
             );
           },
