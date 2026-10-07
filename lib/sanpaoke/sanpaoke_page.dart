@@ -8,7 +8,11 @@ import 'package:quarks_footer/quarks_footer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 final _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-final _money = NumberFormat.currency(locale: 'es_AR', symbol: r'$', decimalDigits: 0);
+final _money = NumberFormat.currency(
+  locale: 'es_AR',
+  symbol: r'$',
+  decimalDigits: 0,
+);
 
 class SanpaokePage extends StatefulWidget {
   const SanpaokePage({super.key});
@@ -97,7 +101,9 @@ class _SanpaokePageState extends State<SanpaokePage> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
-            return Center(child: Text('Error cargando el evento: ${snap.error}'));
+            return Center(
+              child: Text('Error cargando el evento: ${snap.error}'),
+            );
           }
           return _buildContent(context, snap.data ?? {});
         },
@@ -138,17 +144,21 @@ class _SanpaokePageState extends State<SanpaokePage> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.mic_external_on,
-                              color: cs.onPrimaryContainer, size: 32),
+                          Icon(
+                            Icons.mic_external_on,
+                            color: cs.onPrimaryContainer,
+                            size: 32,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Sanpaoke 🎤',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    color: cs.onPrimaryContainer,
-                                  ),
+                              style: Theme.of(
+                                context,
+                              ).textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: cs.onPrimaryContainer,
+                              ),
                             ),
                           ),
                         ],
@@ -164,7 +174,11 @@ class _SanpaokePageState extends State<SanpaokePage> {
                           padding: const EdgeInsets.only(top: 4),
                           child: Row(
                             children: [
-                              Icon(icon, size: 18, color: cs.onPrimaryContainer),
+                              Icon(
+                                icon,
+                                size: 18,
+                                color: cs.onPrimaryContainer,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -178,6 +192,8 @@ class _SanpaokePageState extends State<SanpaokePage> {
                             ],
                           ),
                         ),
+                      const SizedBox(height: 14), // ← nuevo
+                      const _PizzaBadge(),
                     ],
                   ),
                 ),
@@ -189,8 +205,11 @@ class _SanpaokePageState extends State<SanpaokePage> {
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        Icon(Icons.event_busy_outlined,
-                            size: 40, color: cs.secondary),
+                        Icon(
+                          Icons.event_busy_outlined,
+                          size: 40,
+                          color: cs.secondary,
+                        ),
                         const SizedBox(height: 12),
                         const Text(
                           'La venta de entradas no está habilitada',
@@ -334,7 +353,7 @@ class _SanpaokePageState extends State<SanpaokePage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${_money.format(precio)} por entrada · máximo $maxCompra por compra',
+                '${_money.format(precio)} por entrada (incluye pizza libre 🍕) · máximo $maxCompra por compra',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
               ),
               const Divider(height: 32),
@@ -369,11 +388,50 @@ class _SanpaokePageState extends State<SanpaokePage> {
                           ),
                         )
                         : const Icon(Icons.payment),
-                label: Text(_loading ? 'Abriendo MercadoPago…' : 'Pagar con MercadoPago'),
+                label: Text(
+                  _loading ? 'Abriendo MercadoPago…' : 'Pagar con MercadoPago',
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PizzaBadge extends StatelessWidget {
+  const _PizzaBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E0),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF3C77A)),
+      ),
+      child: const Row(
+        children: [
+          Text('🍕', style: TextStyle(fontSize: 26)),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Pizza libre incluida',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  ),
+                  TextSpan(text: '\ncon tu entrada, durante todo el evento'),
+                ],
+              ),
+              style: TextStyle(color: Color(0xFF2C1A00)),
+            ),
+          ),
+        ],
       ),
     );
   }

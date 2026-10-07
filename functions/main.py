@@ -491,6 +491,7 @@ def _build_email(compra: dict, entradas: list[tuple[str, int]], cfg: dict,
         f'¡Hola {nombre}!\n\n'
         f'Gracias por tu compra. Te mandamos {total} {plural} para Sanpaoke 🎤\n'
         f'{det_txt}\n\n'
+        '🍕 La entrada incluye PIZZA LIBRE durante el evento.\n\n'
         'Cada entrada tiene su propio QR: mostralo en la puerta desde el celu '
         '(o impreso). Cada QR sirve para que ingrese UNA persona, una sola vez.\n\n'
         'Grupo Scout San Pablo Apóstol\n'
@@ -502,6 +503,10 @@ def _build_email(compra: dict, entradas: list[tuple[str, int]], cfg: dict,
   <p>Gracias por tu compra. Acá tenés {'tus' if total > 1 else 'tu'}
      <b>{total} {plural}</b> para <b>Sanpaoke</b>.</p>
   {det_html}
+  <p style="background:#fff4e0;border:1px solid #f3c77a;padding:12px;
+            border-radius:8px;font-size:16px;text-align:center">
+    🍕 <b>La entrada incluye pizza libre</b> durante el evento.
+  </p>
   <p style="background:#f2f7f3;padding:12px;border-radius:8px">
     Cada entrada tiene su propio QR: mostralo en la puerta desde el celu
     (o impreso). <b>Cada QR sirve para que ingrese una persona, una sola vez.</b>
@@ -693,7 +698,7 @@ def sanpaoke_create_preference(req: https_fn.CallableRequest) -> dict:
         pref_body = {
             'items': [{
                 'id': 'sanpaoke-entrada',
-                'title': 'Entrada Sanpaoke',
+                'title': 'Entrada Sanpaoke (incluye pizza libre)',
                 'quantity': cantidad,
                 'unit_price': precio,
                 'currency_id': 'ARS',
